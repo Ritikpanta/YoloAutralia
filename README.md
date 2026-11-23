@@ -3,7 +3,8 @@
 A static storefront with three serverless functions, built for Vercel. It has no dependencies and no build step.
 
 - **Pages:** `index.html`, `shop.html`, `product.html`, `contact.html`, `success.html`
-- **3D:** `assets/js/hero3d.js` (walking boots) and `assets/js/shop3d.js` (turntable). Both use three.js 0.160 from jsDelivr. If WebGL isn't available, the pages fall back to CSS animations.
+- **3D:** `assets/js/hero3d.js` (boots walking continuously on a moving floor) and `assets/js/shop3d.js` (turntable).
+- **Try on:** `try-on.html` + `assets/js/tryon.js`: size from height/weight/foot length, a figure scaled to the customer, a to-scale foot close-up, and a camera mode (needs HTTPS, which Vercel provides). Nothing is uploaded. Both use three.js 0.160 from jsDelivr. If WebGL isn't available, the pages fall back to CSS animations.
 - **Cart:** stored in the shopper's browser. The checkout server re-prices everything, so prices can't be tampered with.
 - **API (`/api`):**
   - `checkout`: checks live stock in the Google Sheet, then opens a Stripe Checkout session.
