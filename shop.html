@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shop — YOLO Australia</title>
+  <meta name="description" content="Shop YOLO loafers, formals, sneakers and boots. Prices in AUD incl. GST. Shipped across Australia.">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn2.blanxer.com">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body data-page="shop">
+  <header class="site-header" id="site-header"></header>
+  <main>
+    <section class="page-head">
+      <div class="grid-bg"></div>
+      <div class="wrap">
+        <p class="eyebrow">The range</p>
+        <h1 id="shop-title">Shop all</h1>
+      </div>
+    </section>
+    <div class="shop3d" id="shop3d">
+      <div class="carousel-wrap" id="carousel-wrap" tabindex="0" aria-label="Spinning showcase of styles. Drag to turn.">
+        <div class="carousel" id="carousel"></div>
+        <div class="carousel-floor" aria-hidden="true"></div>
+      </div>
+      <div class="shop3d-label" aria-live="polite"></div>
+    </div>
+    <p class="carousel-hint" id="carousel-hint">Drag to spin · hover to lift · click the front shoe to open it</p>
+    <section style="padding-bottom:110px">
+      <div class="wrap">
+        <div class="filters" id="cat-filters" role="group" aria-label="Filter by category"></div>
+        <div class="filter-row">
+          <span class="result-count" id="result-count" aria-live="polite"></span>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <label class="sr-only" for="colour-filter">Colour</label>
+            <select id="colour-filter"></select>
+            <label class="sr-only" for="sort">Sort</label>
+            <select id="sort">
+              <option value="featured">Featured</option>
+              <option value="price-asc">Price: low to high</option>
+              <option value="price-desc">Price: high to low</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid" id="shop-grid"></div>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer" id="site-footer"></footer>
+  <script src="/assets/js/config.js"></script>
+  <script type="module" src="/lib/catalog.js"></script>
+  <script type="module" src="/lib/shop-config.js"></script>
+  <script type="module" src="/assets/js/shop3d.js"></script>
+  <script type="module" src="/assets/js/app.js"></script>
+</body>
+</html>

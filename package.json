@@ -1,0 +1,8 @@
+{
+  "name": "yolo-australia-web",
+  "private": true,
+  "type": "module",
+  "description": "YOLO Australia storefront: static pages + Vercel functions for Stripe checkout and Google Sheets stock.",
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test tests/api.test.js" }
+}
