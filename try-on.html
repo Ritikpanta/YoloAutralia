@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&family=Poppins:wght@300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/css/styles.css?v=10">
-  <link rel="stylesheet" href="/assets/css/tryon.css?v=10">
+  <link rel="stylesheet" href="/assets/css/tryon.css?v=11">
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
 </head>
 <body data-page="try-on">
@@ -22,6 +22,15 @@
         <p class="eyebrow">Try it on</p>
         <h1>See it on you</h1>
         <p class="lede" style="margin-top:16px">Enter your height, weight and foot length. We'll work out your size and build a 3D model of you wearing the shoe. Drag it to rotate. On a phone you can also try the shoe over your own feet with your camera.</p>
+      </div>
+    </section>
+
+    <section class="walker-section" aria-labelledby="walker-title">
+      <div class="wrap">
+        <h2 id="walker-title" class="sr-only">See the outfit on a walking model</h2>
+        <p class="eyebrow">On the move</p>
+        <p class="lede" style="margin:0 0 22px">Watch it walk. Switch between the women's and men's model, try the casual or the formal outfit, set the height and weight, and drag to look from any side.</p>
+        <div id="walker-root"></div>
       </div>
     </section>
 
@@ -55,5 +64,10 @@
   <script type="module" src="/lib/shop-config.js?v=10"></script>
   <script type="module" src="/assets/js/app.js?v=10"></script>
   <script type="module" src="/assets/js/tryon.js?v=10"></script>
+  <script type="module">
+    import { mountWalker } from "/assets/js/walker3d.js?v=11";
+    import { PRODUCTS } from "/lib/catalog.js?v=10";
+    mountWalker(document.getElementById("walker-root"), { products: PRODUCTS });
+  </script>
 </body>
 </html>

@@ -87,3 +87,33 @@
 .howto-art { display: block; width: 100%; max-width: 520px; height: auto; margin: 12px 0 8px; }
 .howto-art text { font-family: var(--body); }
 .howto-steps { margin: 0 0 8px; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
+
+/* 3D walker */
+.walker-section { padding: 10px 0 90px; }
+.walker { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr); gap: 40px; align-items: start; }
+.walker-stage { position: relative; border-radius: 24px; background: #e4e4e6; aspect-ratio: 5 / 6; overflow: hidden; touch-action: none; }
+.walker-stage canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.walker-stage canvas:active { cursor: grabbing; }
+.walker-status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font-weight: 600; color: var(--ink-2); }
+.walker-status[hidden] { display: none; }
+.walker-cam { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+.walker-cam .chip { background: rgba(255,255,255,.88); backdrop-filter: blur(6px); min-height: 40px; padding: 7px 16px; }
+.walker-cam .chip:hover { background: #fff; }
+.walker-ui { display: grid; gap: 22px; }
+.walker-row { display: grid; gap: 10px; }
+.walker-label { font-weight: 700; font-size: 14px; color: var(--ink-2); }
+.walker-seg { display: inline-flex; flex-wrap: wrap; background: var(--bg-2); border-radius: 999px; padding: 4px; gap: 2px; justify-self: start; }
+.walker-seg button { border: 0; background: none; padding: 10px 18px; border-radius: 999px; font-weight: 700; font-size: 14px; cursor: pointer; min-height: 40px; }
+.walker-seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.walker-shoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.walker-shoe { width: 72px; height: 72px; border-radius: 16px; border: 2px solid var(--line); background: var(--bg-2); padding: 6px; cursor: pointer; font-weight: 700; font-size: 13px; }
+.walker-shoe img { width: 100%; height: 100%; }
+.walker-shoe[aria-pressed="true"] { border-color: var(--ink); }
+.walker-shoenote { max-width: 40ch; }
+.walker-toggle { display: flex; gap: 10px; align-items: center; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.walker-toggle input { width: 20px; height: 20px; accent-color: #0a0a0a; }
+.walker-toggle:has(input:disabled) { opacity: .45; }
+@media (max-width: 900px) {
+  .walker { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .walker-stage { aspect-ratio: 4 / 5; }
+}
