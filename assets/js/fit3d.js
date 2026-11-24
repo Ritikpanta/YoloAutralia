@@ -296,7 +296,18 @@ async function createFit3DUnsafe(container) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 50);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d8d8, 1.4));
+  {
+    const env = new THREE.Scene();
+    const room = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 10), new THREE.MeshBasicMaterial({ color: 0x9a9a9a, side: THREE.BackSide }));
+    env.add(room);
+    const panel = (w, h, x, y, z, ry, v) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(v, v, v), side: THREE.DoubleSide })); m.position.set(x, y, z); m.rotation.y = ry; env.add(m); };
+    panel(4, 2.5, 0, 1.5, 4.9, Math.PI, 3.2); panel(2.5, 3, -4.9, 1.2, 0, Math.PI / 2, 2.2); panel(3, 0.6, 0, 2.95, 0, 0, 2.5);
+    const pm = new THREE.PMREMGenerator(renderer);
+    scene.environment = pm.fromScene(env, 0.04).texture;
+    pm.dispose();
+  }
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xb8b8b8, 1.5));
+  const fill = new THREE.DirectionalLight(0xffffff, 0.9); fill.position.set(-2.5, 1.6, 2); scene.add(fill);
   const key = new THREE.DirectionalLight(0xffffff, 2.2);
   key.position.set(1.6, 3.2, 2.4); key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024); key.shadow.camera.left = -1.2; key.shadow.camera.right = 1.2; key.shadow.camera.top = 2.4; key.shadow.camera.bottom = -0.2; key.shadow.radius = 4;
@@ -307,7 +318,17 @@ async function createFit3DUnsafe(container) {
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.553, 96), new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0.15 }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.001; scene.add(ring);
 
-  const skin = new THREE.MeshStandardMaterial({ color: 0xe9e7e4, roughness: 0.55, metalness: 0 });
+  // fashion-render mannequin: matte grey body, glossy dark face and hands
+  const skin = new THREE.MeshStandardMaterial({ color: 0xbdbdbd, roughness: 0.62, metalness: 0 });
+  const chrome = new THREE.MeshPhysicalMaterial({ color: 0x4a4a4e, roughness: 0.12, metalness: 0.85, clearcoat: 1, clearcoatRoughness: 0.05 });
+  const fabricWhite = new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 0.92, side: THREE.DoubleSide });
+  const fabricGrey = new THREE.MeshStandardMaterial({ color: 0x8b8b8b, roughness: 0.95, side: THREE.DoubleSide });
+  // tee prints (front chest logo + back artwork)
+  const loadImage = (src) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  const [printBack, printFront] = await Promise.all([loadImage("/assets/img/apparel/phool-back.png"), loadImage("/assets/img/apparel/phool-front.png")]);
+  const teeCanvas = document.createElement("canvas"); teeCanvas.width = 2048; teeCanvas.height = 1024;
+  const teeTex = new THREE.CanvasTexture(teeCanvas); teeTex.colorSpace = THREE.SRGBColorSpace; teeTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const teeMat = new THREE.MeshStandardMaterial({ map: teeTex, roughness: 0.92, side: THREE.DoubleSide });
   let figure = null;
 
   function limb(p0, p1, r0, r1, segs = 28) {
@@ -335,8 +356,105 @@ async function createFit3DUnsafe(container) {
     const m = new THREE.Mesh(g, skin); m.castShadow = true; return m;
   }
 
+  // ring-lofted shell; sections: [{y, rx, rz}] bottom->top; uv: u around (front centre u=0.25), v up
+  function loft(sections, mat, zOff = 0.004) {
+    const N = 64, pos = [], uv = [], idx = [];
+    const y0 = sections[0].y, y1 = sections[sections.length - 1].y;
+    sections.forEach((sc) => {
+      for (let i = 0; i <= N; i++) { const a = (i / N) * Math.PI * 2; pos.push(Math.cos(a) * sc.rx, sc.y, Math.sin(a) * sc.rz + zOff); uv.push(i / N, (sc.y - y0) / (y1 - y0)); }
+    });
+    for (let k = 0; k < sections.length - 1; k++) for (let i = 0; i < N; i++) {
+      const a = k * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1;
+      idx.push(a, d, b, a, c, d);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; return m;
+  }
+  // tube along p0->p1 with a radius profile [[t, r], ...] (t: 0 at p0 .. 1 at p1)
+  function sleeve(p0, p1, profile, mat) {
+    const a = new THREE.Vector3(p0.x, p0.y, p0.z || 0), b = new THREE.Vector3(p1.x, p1.y, p1.z || 0);
+    const len = a.distanceTo(b);
+    const pts = profile.map(([t, rr]) => new THREE.Vector2(rr, (0.5 - t) * len));
+    const g = new THREE.LatheGeometry(pts, 48);
+    const m = new THREE.Mesh(g, mat);
+    m.position.copy(a).add(b).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), b.clone().sub(a).normalize());
+    m.castShadow = true; return m;
+  }
+  function radiiAt(b, y) {                        // torso radii at height y (interpolated)
+    const T = b.torso;
+    if (y <= T[0].y) return { rx: T[0].rx, rz: T[0].rz };
+    for (let i = 0; i < T.length - 1; i++) if (y <= T[i + 1].y) { const t = (y - T[i].y) / (T[i + 1].y - T[i].y); return { rx: lerp(T[i].rx, T[i + 1].rx, t), rz: lerp(T[i].rz, T[i + 1].rz, t) }; }
+    return { rx: T[T.length - 1].rx, rz: T[T.length - 1].rz };
+  }
+  // draw the tee texture: white jersey, chest logo on the front (u=0.25), artwork on the back (u=0.75)
+  function paintTee(circM, heightM) {
+    const g = teeCanvas.getContext("2d"), W = teeCanvas.width, Hc = teeCanvas.height;
+    g.fillStyle = "#f6f6f4"; g.fillRect(0, 0, W, Hc);
+    // soft fabric variation
+    for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(0,0,0,${0.006 + Math.random() * 0.01})`; g.fillRect(Math.random() * W, 0, 2 + Math.random() * 30, Hc); }
+    const pxPerM_u = W / circM, pxPerM_v = Hc / heightM;
+    // canvas top row = collar (texture flipY), so y is simply the distance below the collar
+    const place = (img, uCentre, belowCollarM, widthM) => {
+      if (!img) return;
+      const w = widthM * pxPerM_u, h = widthM * (img.height / img.width) * pxPerM_v;
+      const x = uCentre * W - w / 2, y = belowCollarM * pxPerM_v;
+      g.save(); g.translate(x + w / 2, y + h / 2); g.scale(-1, 1); g.drawImage(img, -w / 2, -h / 2, w, h); g.restore();
+    };
+    place(printFront, 0.25, 0.13, 0.10);          // chest logo: 10 cm wide, 13 cm below the collar
+    place(printBack, 0.75, 0.11, 0.31);           // back print: 31 cm wide, 11 cm below the collar
+    teeTex.needsUpdate = true;
+  }
+  function dressAndFace(b, shoe) {
+    const H = b.H, g = new THREE.Group();
+    // --- oversized tee ---
+    const sh = b.shoulder.x + b.r.upperArm * 1.25;
+    const tY = [0.405, 0.445, 0.485, 0.52, 0.555, 0.59, 0.625, 0.66, 0.7, 0.74, 0.77, 0.79, 0.805, 0.82, 0.834, 0.845, 0.853];
+    const sections = tY.map((f) => {
+      const y = f * H, t = radiiAt(b, Math.max(y, 0.54 * H));   // below the hips the tee hangs straight, it doesn't follow the body in
+      let rx = t.rx * 1.13 + 0.014, rz = t.rz * 1.16 + 0.014;
+      if (f < 0.54) { rx += (0.54 - f) * H * 0.06; rz += (0.54 - f) * H * 0.05; }   // slight A-line flare to the hem
+      if (f >= 0.785 && f < 0.8) rx = Math.max(rx, lerp(rx, sh, 0.75));
+      if (f >= 0.8 && f < 0.83) { rx = Math.max(rx, sh); rz = t.rz * 1.05 + 0.012; }
+      if (f >= 0.83) { rx = f >= 0.85 ? b.r.neck * 1.6 : lerp(sh, b.r.neck * 1.6, 0.62); rz = f >= 0.85 ? b.r.neck * 1.5 : t.rz * 1.0 + 0.008; }
+      return { y, rx, rz };
+    });
+    const ellC = (rx, rz) => Math.PI * (3 * (rx + rz) - Math.sqrt((3 * rx + rz) * (rx + 3 * rz)));   // Ramanujan
+    paintTee(ellC(sections[9].rx, sections[9].rz), sections[sections.length - 1].y - sections[0].y);
+    g.add(loft(sections, teeMat));
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(1, 0.08, 10, 48), fabricWhite);
+    collar.rotation.x = Math.PI / 2; collar.scale.set(b.r.neck * 1.6, b.r.neck * 1.5, 0.01 * 1);
+    collar.position.set(0, sections[sections.length - 1].y, 0.004); g.add(collar);
+    for (const side of [-1, 1]) {              // short sleeves following the A-pose arm
+      const s0 = { x: side * (b.shoulder.x - b.r.upperArm * 0.6), y: b.shoulder.y + b.r.upperArm * 0.35 }, e = { x: side * b.elbow.x, y: b.elbow.y, z: -0.01 };
+      const s1 = { x: lerp(s0.x, e.x, 0.42), y: lerp(s0.y, e.y, 0.42), z: -0.005 };
+      g.add(sleeve(s0, s1, [[0, b.r.upperArm * 1.72], [0.45, b.r.upperArm * 1.62], [1, b.r.upperArm * 1.55]], fabricWhite));
+    }
+    // --- wide-leg trousers ---
+    const wY = [0.44, 0.47, 0.5, 0.54, 0.585];
+    // waistband/seat: tapers from the hips down into the two legs so there's no open edge at the crotch
+    const thighR = b.r.thighTop * 1.08 + 0.008;   // keep the trouser top inside the tee
+    const seat = [{ y: 0.36 * H, rx: b.hip.x * 0.85 + thighR * 0.9, rz: thighR * 1.0 }, { y: 0.40 * H, rx: b.hip.x * 0.85 + thighR, rz: thighR * 1.08 }]
+      .concat(wY.map((f) => { const t = radiiAt(b, f * H); return { y: f * H, rx: t.rx * 1.04 + 0.006, rz: t.rz * 1.05 + 0.006 }; }));
+    g.add(loft(seat, fabricGrey));   // sits inside the tee hem
+    const hemY = Math.max(0.04, b.ankle.y - 0.012) + (shoe.style.boot ? 0.03 : 0);
+    for (const side of [-1, 1]) {
+      const top = { x: side * b.hip.x * 0.85, y: 0.5 * H }, hem = { x: side * (b.ankle.x + 0.01), y: hemY, z: 0.008 };
+      const wide = 0.095 + 0.012 * (b.H - 1.6);
+      g.add(sleeve(top, hem, [[0, thighR], [0.35, b.r.thighTop * 1.12 + 0.02], [0.7, wide * 0.96], [1, wide]], fabricGrey));
+    }
+    // --- faceless glossy face + glossy hands ---
+    const face = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), chrome);
+    face.scale.set(b.head.rx * 0.8, b.head.ry * 0.78, b.head.rz * 0.66);
+    face.position.set(0, b.head.y - b.head.ry * 0.08, b.head.rz * 0.42); face.castShadow = true; g.add(face);
+    return g;
+  }
+
   function build({ plan, shoe }) {
-    if (figure) { scene.remove(figure); figure.traverse((o) => { o.geometry?.dispose(); if (o.material && o.material !== skin) o.material.dispose?.(); }); }
+    const keep = new Set([skin, chrome, fabricWhite, fabricGrey, teeMat]);
+    if (figure) { scene.remove(figure); figure.traverse((o) => { o.geometry?.dispose(); if (o.material && !keep.has(o.material)) o.material.dispose?.(); }); }
     figure = new THREE.Group();
     const b = plan;
     // legs (with a slight natural knee line), feet turned out ~7°
@@ -352,12 +470,12 @@ async function createFit3DUnsafe(container) {
       figure.add(joint({ x: hip.x, y: hip.y + 0.01 }, b.r.thighTop * 0.98));
       // arms in a relaxed A-pose
       const sh = { x: side * b.shoulder.x, y: b.shoulder.y }, el = { x: side * b.elbow.x, y: b.elbow.y, z: -0.01 }, wr = { x: side * b.wrist.x, y: b.wrist.y, z: 0.02 };
-      figure.add(joint(sh, b.r.upperArm * 1.18));
+      // shoulder joint sits inside the tee sleeve, so no sphere here (it poked through the fabric)
       figure.add(limb(sh, el, b.r.upperArm, b.r.elbow));
       figure.add(joint(el, b.r.elbow));
       figure.add(limb(el, wr, b.r.forearm, b.r.wrist));
       figure.add(joint(wr, b.r.wrist));
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), skin);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), chrome);
       hand.scale.set(b.hand.r * 0.55, b.hand.len * 0.5, b.hand.r * 1.05);
       hand.position.set(wr.x + side * 0.004, wr.y - b.hand.len * 0.45, 0.022); hand.castShadow = true; figure.add(hand);
 
@@ -373,6 +491,7 @@ async function createFit3DUnsafe(container) {
     const head = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 28), skin);
     head.scale.set(b.head.rx, b.head.ry, b.head.rz); head.position.set(0, b.head.y, 0.006); head.castShadow = true;
     figure.add(head);
+    figure.add(dressAndFace(b, shoe));
     scene.add(figure);
     target.H = b.H;
   }
@@ -384,6 +503,7 @@ async function createFit3DUnsafe(container) {
   function preset(m) {
     mode = m;
     if (m === "feet") { want.dist = 0.85; want.focusY = 0.07; want.el = 0.32; }
+    else if (m === "top") { want.dist = 1.25; want.focusY = target.H * 0.7; want.el = 0.05; }
     else { want.dist = target.H * 2.15; want.focusY = target.H * 0.5; want.el = 0.1; }
   }
   let dragging = false, lx = 0, ly = 0; const ptrs = new Map(); let pinch0 = 0;
@@ -424,6 +544,7 @@ async function createFit3DUnsafe(container) {
 
   return {
     THREE, scene, skin,
+    setAzimuth(a) { cam.az = a; cam.auto = false; },
     update({ heightCm, weightKg, fit, style, colour, gloss }) {
       const body = solveBody(heightCm, weightKg);
       build({ plan: body.plan, shoe: { style: STYLES[style] || STYLES.loafer, L: fit.outerCm / 100, B: (fit.breadthCm + 1.0) / 100, colour, gloss } });

@@ -52,8 +52,8 @@ export function mountFitPanel(root, opts) {
       </div>
       <div class="view-stage">
         <div class="fit3d" data-o="stage3d"><p class="fit3d-msg" data-o="msg">Loading 3D model…</p>
-          <div class="fit3d-tools"><button type="button" data-p="full">Full body</button><button type="button" data-p="feet">Feet</button><button type="button" data-p="reset" aria-label="Reset view">↺</button></div>
-          <p class="fit3d-hint">Drag to rotate · scroll or pinch to zoom</p>
+          <div class="fit3d-tools"><button type="button" data-p="full">Full body</button><button type="button" data-p="tee">Tee</button><button type="button" data-p="feet">Feet</button><button type="button" data-p="reset" aria-label="Reset view">↺</button></div>
+          <p class="fit3d-hint">Drag to rotate · scroll or pinch to zoom · tap Tee to see the print</p>
         </div>
         <svg data-o="foot" viewBox="0 0 600 700" role="img" aria-label="Side view of your foot length against the shoe" hidden></svg>
       </div>
@@ -63,7 +63,7 @@ export function mountFitPanel(root, opts) {
   if (inp.shoe) inp.shoe.value = product.slug;
   try { const sv = JSON.parse(localStorage.getItem("yolo-fit") || "null"); if (sv) { inp.h.value = sv.h; inp.w.value = sv.w; if (sv.f) inp.f.value = sv.f; } } catch {}
 
-  let view = "model", viewer = null, lastEU = null, fit = null, raf = 0;
+  let teeBack = false, view = "model", viewer = null, lastEU = null, fit = null, raf = 0;
   const stage = $('[data-o="stage3d"]');
 
   // ---------- 3D viewer ----------
@@ -76,7 +76,9 @@ export function mountFitPanel(root, opts) {
   });
   root.querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => {
     if (!viewer) return;
-    if (b.dataset.p === "reset") viewer.resetView(); else viewer.preset(b.dataset.p);
+    if (b.dataset.p === "reset") viewer.resetView();
+    else if (b.dataset.p === "tee") { teeBack = !teeBack; viewer.preset("top"); viewer.setAzimuth(teeBack ? Math.PI : 0); b.textContent = teeBack ? "Tee (back)" : "Tee (front)"; }
+    else viewer.preset(b.dataset.p);
   }));
 
   async function render3D() {
