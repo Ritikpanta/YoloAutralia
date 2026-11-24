@@ -2,7 +2,7 @@
    Height, weight and foot length -> recommended EU size, the body maths, a 3D mannequin wearing the
    shoe (assets/js/fit3d.js), and a to-scale foot close-up. On /try-on it adds a shoe picker and a
    camera mode. Everything runs in the browser; nothing is uploaded. */
-import { createFit3D, footAndShoe, solveBody, styleFor, sampleUpperColour } from "./fit3d.js";
+import { createFit3D, footAndShoe, solveBody, styleFor, sampleUpperColour, footprint } from "./fit3d.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -54,8 +54,9 @@ export function mountFitPanel(root, opts) {
         <div class="fit3d" data-o="stage3d"><p class="fit3d-msg" data-o="msg">Loading 3D model…</p>
           <div class="fit3d-tools"><button type="button" data-p="full">Full body</button><button type="button" data-p="tee">Tee</button><button type="button" data-p="feet">Feet</button><button type="button" data-p="reset" aria-label="Reset view">↺</button></div>
           <p class="fit3d-hint">Drag to rotate · scroll or pinch to zoom · tap Tee to see the print</p>
+          <div class="fit3d-measure" data-o="measure" hidden></div>
         </div>
-        <svg data-o="foot" viewBox="0 0 600 700" role="img" aria-label="Side view of your foot length against the shoe" hidden></svg>
+        <svg data-o="foot" viewBox="0 0 600 700" role="img" aria-label="Top view of your foot inside the shoe, drawn to scale" hidden></svg>
       </div>
     </div>`;
 
@@ -78,6 +79,8 @@ export function mountFitPanel(root, opts) {
     if (!viewer) return;
     if (b.dataset.p === "reset") viewer.resetView();
     else if (b.dataset.p === "tee") { teeBack = !teeBack; viewer.preset("top"); viewer.setAzimuth(teeBack ? Math.PI : 0); b.textContent = teeBack ? "Tee (back)" : "Tee (front)"; }
+    else if (b.dataset.p === "feet") setView("foot");
+    else if (b.dataset.p === "full") setView("model");
     else viewer.preset(b.dataset.p);
   }));
 
@@ -118,45 +121,79 @@ export function mountFitPanel(root, opts) {
         <dt>Size</dt><dd>EU = 1.5 × (${fit.footCm} + 1.5) = ${fit.euExact.toFixed(2)} → EU ${fit.eu}</dd>
         <dt>Shoe</dt><dd>${fit.insideCm.toFixed(1)} cm inside, ${fit.outerCm.toFixed(1)} cm outside · ${fit.roomCm.toFixed(1)} cm toe room</dd>
       </dl>`;
+    const verdictShort = fit.roomCm < 0.5 ? "Snug" : fit.roomCm > 2 ? "Roomy" : "Good fit";
+    $('[data-o="measure"]').innerHTML = `<strong>${verdictShort}</strong><span>Your foot ${fit.footCm.toFixed(1)} cm · EU ${fit.eu} inside ${fit.insideCm.toFixed(1)} cm · ${fit.roomCm.toFixed(1)} cm toe room</span><em>See-through shoe: the grey foot inside is yours, to scale</em>`;
     try { localStorage.setItem("yolo-fit", JSON.stringify({ h, w, f: inp.f.value })); } catch {}
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => { render3D(); drawFoot(); });
   }
 
-  // ---------- foot close-up (to scale) ----------
+  // ---------- foot close-up: top view, everything to the same scale ----------
   async function drawFoot() {
     if (view !== "foot" || !fit) return;
     const svg = $('[data-o="foot"]');
-    const img = await loadImg(product.cutoutSide || product.cutout || product.images[0]);
-    const PX = 17, FLOOR = 470, x0 = 70;
-    const footL = fit.footCm * PX, shoeIn = fit.insideCm * PX, shoeOut = fit.outerCm * PX, heelX = x0 + 0.6 * PX;
-    const fx = (t) => heelX + t * footL;
-    const footPath = `M${fx(0)} ${FLOOR - 0.5 * PX} C ${fx(-0.02)} ${FLOOR - 3.2 * PX}, ${fx(0.06)} ${FLOOR - 6.8 * PX}, ${fx(0.2)} ${FLOOR - 7.2 * PX} L ${fx(0.26)} ${FLOOR - 9.5 * PX} L ${fx(0.4)} ${FLOOR - 9.5 * PX} C ${fx(0.45)} ${FLOOR - 6.5 * PX}, ${fx(0.7)} ${FLOOR - 4.4 * PX}, ${fx(0.88)} ${FLOOR - 3.2 * PX} C ${fx(0.97)} ${FLOOR - 2.8 * PX}, ${fx(1)} ${FLOOR - 1.6 * PX}, ${fx(1)} ${FLOOR - 0.6 * PX} C ${fx(0.99)} ${FLOOR}, ${fx(0.02)} ${FLOOR}, ${fx(0)} ${FLOOR - 0.5 * PX} Z`;
-    let shoe = "", note = "";
-    if (img && product.cutoutSide) {
-      const w = shoeOut / (0.973 - 0.057), h = w * (img.height / img.width);
-      shoe = `<image href="${esc(img.src)}" x="${x0 - 0.057 * w}" y="${FLOOR - h * (1 - 0.073)}" width="${w}" height="${h}" opacity=".92"/>`;
-    } else if (img) {
-      const w = shoeOut * 1.35, h = w * (img.height / img.width);
-      shoe = `<image href="${esc(img.src)}" x="${x0 - 0.1 * shoeOut}" y="${FLOOR - h * 0.9}" width="${w}" height="${h}" opacity=".9"/>`;
-      note = "Side view isn't available for this style, so the photo is a guide only.";
-    }
+    const st = styleFor(product);
+    const point = { loafer: 1.7, derby: 1.55, sneaker: 2.2, slipon: 2.2, chelsea: 1.8, zip: 1.8, work: 2.6 }[st] || 1.8;
+    const outW = fit.breadthCm + 1.6, inW = fit.breadthCm + 0.5;          // shoe outside / insole width, cm
+    const PX = 500 / fit.outerCm, x0 = 50, CY = 330;
+    const X = (cm) => x0 + cm * PX;
+    // outline of a footprint-shaped loop: length L (cm) starting at x (cm), width W (cm), toe bias toward the big toe
+    const outline = (start, L, W, pt, arch) => {
+      const top = [], bot = [];
+      for (let i = 0; i <= 80; i++) {
+        const u = i / 80, hw = footprint(u, pt) * W / 2;
+        const bias = -0.07 * W * Math.max(0, (u - 0.65) / 0.35) ** 2;                    // big toe on the inner side
+        const inner = hw * (1 - arch * Math.exp(-(((u - 0.42) / 0.13) ** 2)));             // arch on the inner side
+        top.push([X(start + u * L), CY + (bias - inner) * PX]);
+        bot.push([X(start + u * L), CY + (bias + hw) * PX]);
+      }
+      const pts = top.concat(bot.reverse());
+      return "M" + pts.map((p) => p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" L") + " Z";
+    };
+    const heelIn = (fit.outerCm - fit.insideCm) * 0.35;                    // heel counter thickness
+    const shoeOut = outline(0, fit.outerCm, outW, point, 0.08);
+    const insole = outline(heelIn, fit.insideCm, inW, point, 0.12);
+    const foot = outline(heelIn + 0.1, fit.footCm, fit.breadthCm, 1.35, 0.3);
+    const footTip = X(heelIn + 0.1 + fit.footCm), inTip = X(heelIn + fit.insideCm);
     const room = fit.roomCm;
-    const dim = (y, a, b, label) => `<g stroke="#0a0a0a" stroke-width="1.2"><line x1="${a}" x2="${b}" y1="${y}" y2="${y}"/><line x1="${a}" x2="${a}" y1="${y - 6}" y2="${y + 6}"/><line x1="${b}" x2="${b}" y1="${y - 6}" y2="${y + 6}"/></g><text x="${(a + b) / 2}" y="${y - 10}" font-size="13" font-weight="700" text-anchor="middle" fill="#0a0a0a">${label}</text>`;
+    const dim = (y, a, b, label, col = "#0a0a0a") => `<g stroke="${col}" stroke-width="1.2"><line x1="${a}" x2="${b}" y1="${y}" y2="${y}"/><line x1="${a}" x2="${a}" y1="${y - 6}" y2="${y + 6}"/><line x1="${b}" x2="${b}" y1="${y - 6}" y2="${y + 6}"/></g><text x="${(a + b) / 2}" y="${y - 9}" font-size="13" font-weight="700" text-anchor="middle" fill="${col}">${label}</text>`;
     const verdict = room < 0.5 ? "Snug: consider a size up" : room > 2 ? "Roomy: consider a size down" : "Good fit: about a thumb's width of room";
+    const widthGap = inW - fit.breadthCm;
+    const ballX = X(heelIn + 0.1 + fit.footCm * 0.7);
+    const img = await loadImg(product.cutout || product.images[0]);
     svg.innerHTML = `
-      <line x1="30" x2="570" y1="${FLOOR}" y2="${FLOOR}" stroke="#0a0a0a" stroke-opacity=".15"/>${shoe}
-      <path d="${footPath}" fill="#0a0a0a" fill-opacity=".06" stroke="#0a0a0a" stroke-width="1.5" stroke-dasharray="5 5"/>
-      ${dim(FLOOR + 40, heelX, heelX + footL, `Your foot ${fit.footCm.toFixed(1)} cm`)}
-      ${dim(FLOOR + 92, x0, x0 + shoeIn, `EU ${fit.eu} inside length ≈ ${fit.insideCm.toFixed(1)} cm`)}
-      <text x="300" y="${FLOOR + 150}" font-size="16" font-weight="800" text-anchor="middle" fill="#0a0a0a">${verdict}</text>
-      <text x="300" y="${FLOOR + 172}" font-size="12" text-anchor="middle" fill="#8a8a8a">${room.toFixed(1)} cm of toe room${note ? " · " + esc(note) : ""}</text>
-      <text x="300" y="60" font-size="12" text-anchor="middle" fill="#8a8a8a">Dashed outline is your foot, drawn to scale</text>`;
+      <defs><pattern id="roomHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#0a0a0a" stroke-opacity=".35" stroke-width="2"/></pattern>
+        <clipPath id="insoleClip"><path d="${insole}"/></clipPath></defs>
+      ${img ? `<image href="${esc(img.src)}" x="40" y="40" width="130" height="80" preserveAspectRatio="xMidYMid meet"/>` : ""}
+      <text x="184" y="72" font-size="15" font-weight="800" fill="#0a0a0a">${esc(product.name)} · EU ${fit.eu}</text>
+      <text x="184" y="94" font-size="12" fill="#8a8a8a">Seen from above, drawn to scale</text>
+      <path d="${shoeOut}" fill="#ffffff" stroke="#0a0a0a" stroke-width="2"/>
+      <path d="${insole}" fill="#ececea" stroke="#0a0a0a" stroke-opacity=".25"/>
+      ${room > 0 ? `<rect x="${footTip}" y="${CY - outW * PX}" width="${Math.max(0, inTip - footTip)}" height="${outW * 2 * PX}" fill="url(#roomHatch)" clip-path="url(#insoleClip)"/>` : ""}
+      <path d="${foot}" fill="#0a0a0a" fill-opacity=".07" stroke="#0a0a0a" stroke-width="1.6" stroke-dasharray="6 5"/>
+      <g stroke="#0a0a0a" stroke-opacity=".5" stroke-width="1"><line x1="${ballX}" x2="${ballX}" y1="${CY - inW / 2 * PX - 4}" y2="${CY + inW / 2 * PX + 4}" stroke-dasharray="2 3"/></g>
+      <text x="${ballX + 8}" y="${CY - inW / 2 * PX - 8}" font-size="11" fill="#5a5a5a">Width at the ball: foot ${fit.breadthCm.toFixed(1)} cm · shoe ${inW.toFixed(1)} cm</text>
+      ${dim(CY + outW / 2 * PX + 46, X(heelIn + 0.1), footTip, `Your foot ${fit.footCm.toFixed(1)} cm`)}
+      ${dim(CY + outW / 2 * PX + 96, X(heelIn), inTip, `EU ${fit.eu} inside length ${fit.insideCm.toFixed(1)} cm`)}
+      <text x="300" y="${CY + outW / 2 * PX + 150}" font-size="17" font-weight="800" text-anchor="middle" fill="#0a0a0a">${verdict}</text>
+      <text x="300" y="${CY + outW / 2 * PX + 174}" font-size="12" text-anchor="middle" fill="#8a8a8a">${room.toFixed(1)} cm of toe room (hatched) · ${widthGap.toFixed(1)} cm spare width at the ball</text>
+      <g font-size="11" fill="#5a5a5a"><line x1="40" x2="62" y1="${CY + outW / 2 * PX + 206}" y2="${CY + outW / 2 * PX + 206}" stroke="#0a0a0a" stroke-dasharray="6 5"/><text x="68" y="${CY + outW / 2 * PX + 210}">Your foot</text>
+        <rect x="150" y="${CY + outW / 2 * PX + 200}" width="16" height="12" fill="#ececea" stroke="#0a0a0a" stroke-opacity=".25"/><text x="172" y="${CY + outW / 2 * PX + 210}">Inside of the shoe</text>
+        <rect x="290" y="${CY + outW / 2 * PX + 200}" width="16" height="12" fill="#fff" stroke="#0a0a0a" stroke-width="1.5"/><text x="312" y="${CY + outW / 2 * PX + 210}">Outside of the shoe</text></g>`;
   }
 
   function setView(v) {
     view = v;
     root.querySelectorAll(".view-tabs button").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.view === v)));
+    if (viewer) {
+      // the close-up is the 3D model itself: the camera flies to the feet and the shoes turn see-through
+      stage.removeAttribute("hidden");
+      $('[data-o="foot"]').setAttribute("hidden", "");
+      viewer.preset(v === "foot" ? "feet" : "full");
+      $('[data-o="measure"]').toggleAttribute("hidden", v !== "foot");
+      return;
+    }
+    // no WebGL: a to-scale drawing instead
     stage.toggleAttribute("hidden", v !== "model");
     $('[data-o="foot"]').toggleAttribute("hidden", v !== "foot");
     if (v === "foot") drawFoot();

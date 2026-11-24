@@ -1,5 +1,5 @@
 // Builds the try-on figure off the main thread (see fit3d-geom.js).
-import { buildFigure } from "./fit3d-geom.js?v=8";
+import { buildFigure } from "./fit3d-geom.js?v=9";
 
 self.onmessage = (e) => {
   const { id, opts } = e.data;

@@ -119,7 +119,7 @@ export function styleFor(product) {
 }
 
 // half-width of the footprint at u (0 = heel, 1 = toe), as a fraction of half the breadth
-function footprint(u, point) {
+export function footprint(u, point) {
   if (u < 0.12) return 0.78 * Math.sqrt(Math.max(0, u / 0.12)) + 0.02;
   if (u < 0.45) return lerp(0.80, 0.88, (u - 0.12) / 0.33);
   if (u < 0.72) return lerp(0.88, 1.0, smooth((u - 0.45) / 0.27));
@@ -386,7 +386,7 @@ async function createFit3DUnsafe(container) {
   let buildCount = 0;
   // geometry is built in a worker (fit3d-geom.js), then dressed here
   let worker = null, seq = 0, inFlight = false, queued = null;
-  try { worker = new Worker(new URL("./fit3d-worker.js?v=8", import.meta.url), { type: "module" }); } catch { worker = null; }
+  try { worker = new Worker(new URL("./fit3d-worker.js?v=9", import.meta.url), { type: "module" }); } catch { worker = null; }
   let geomLocal = null;
   async function buildGeometry(opts) {
     if (worker) {
@@ -399,17 +399,20 @@ async function createFit3DUnsafe(container) {
       if (r) return r;
       worker = null;                                              // worker failed: build on this thread from now on
     }
-    geomLocal ||= await import("./fit3d-geom.js?v=8");
+    geomLocal ||= await import("./fit3d-geom.js?v=9");
     return geomLocal.buildFigure(opts);
   }
 
-  async function rebuild({ heightCm, weightKg, fit, style, colour, gloss }) {
+  const sCache = new Map();
+  async function rebuild({ heightCm, weightKg, fit, style, colour, gloss }, draft = false) {
     const st = STYLES[style] || STYLES.loafer;
-    const g = await buildGeometry({ heightCm, weightKg, fit, st: { sole: st.sole, heel: st.heel, collar: st.collar, boot: !!st.boot } });
+    const key = `${heightCm}|${weightKg}|${fit.footCm}|${fit.breadthCm}`;
+    const g = await buildGeometry({ heightCm, weightKg, fit, draft, sKnown: sCache.get(key) || null, st: { sole: st.sole, heel: st.heel, collar: st.collar, boot: !!st.boot } });
+    sCache.set(key, g.s);
     const { H, lift, heelZ } = g;
     setMesh("body", g.body, bodyMat);
     setMesh("tee", g.tee, teeMat);
-    setMesh("pants", g.pants, pantsMat);
+    setMesh("pants", g.pants, pantsMat); meshes.pants.visible = !xray;
     // ---- shoes ----
     shoes.forEach((o) => { figure.parent.remove(o); o.traverse((m) => { m.geometry?.dispose(); m.material?.dispose?.(); }); });
     shoes.length = 0;
@@ -421,6 +424,7 @@ async function createFit3DUnsafe(container) {
       if (sx < 0) o.scale.x = -1;
       scene.add(o); shoes.push(o);
     }
+    applyXray();
     figure.position.y = lift;
     target.H = H;
     buildCount++;
@@ -433,9 +437,16 @@ async function createFit3DUnsafe(container) {
   const target = { H: 1.75 }, cam = { az: 0.5, el: 0.08, dist: 4, focusY: 0.9, auto: true };
   const want = { dist: 4, focusY: 0.9, el: 0.08 };
   let mode = "full";
-  function preset(m) {
+  // feet close-up: see-through shoes and trousers, so the foot inside the shoe is visible
+  let xray = false;
+  function applyXray() {
+    if (meshes.pants) meshes.pants.visible = !xray;
+    for (const o of shoes) o.traverse((m) => { if (!m.isMesh) return; m.material.transparent = xray; m.material.opacity = xray ? 0.42 : 1; m.material.depthWrite = !xray; m.material.needsUpdate = true; m.castShadow = !xray; });
+  }
+  function preset(m, keepX) {
     mode = m;
-    if (m === "feet") { want.dist = 1.0; want.focusY = 0.12; want.el = 0.28; }
+    if (!keepX) { xray = m === "feet"; applyXray(); }
+    if (m === "feet") { want.dist = 1.05; want.focusY = 0.05; want.el = 0.78; cam.az = 0.55; cam.auto = false; }
     else if (m === "top") { want.dist = 1.5; want.focusY = target.H * 0.72; want.el = 0.04; }
     else { want.dist = target.H * 2.25; want.focusY = target.H * 0.52; want.el = 0.08; }
   }
@@ -472,15 +483,21 @@ async function createFit3DUnsafe(container) {
 
   // rebuilding takes a moment, so slider drags are coalesced: one build at a time, latest wins
   let lastResult = null;
+  let fullDone = true;
   async function pump() {
-    if (inFlight || !queued) return;
+    if (inFlight) return;
+    if (!queued && fullDone) return;
     inFlight = true;
-    const opts = queued; queued = null;
-    try { lastResult = await rebuild(opts); if (mode === "full") preset("full"); }
+    let opts, draft;
+    if (queued) { opts = queued; queued = null; draft = true; fullDone = false; lastOpts = opts; }
+    else { opts = lastOpts; draft = false; fullDone = true; }
+    try { lastResult = await rebuild(opts, draft); if (mode === "full" && draft) preset("full", true); }
     catch (e) { console.info("3D try-on build failed:", e?.message || e); }
     inFlight = false;
-    pump();
+    // wait a beat before the full-quality pass, so a slider drag stays on quick drafts
+    if (!queued && !fullDone) setTimeout(pump, 250); else pump();
   }
+  let lastOpts = null;
   return {
     THREE, scene,
     setAzimuth(a) { cam.az = a; cam.auto = false; },
@@ -489,7 +506,7 @@ async function createFit3DUnsafe(container) {
       canvas.setAttribute("aria-label", `3D mannequin, ${opts.heightCm} cm and ${opts.weightKg} kg, wearing EU ${opts.fit.eu}. Drag to rotate.`);
       return lastResult;
     },
-    whenBuilt() { return new Promise((res) => { const t = setInterval(() => { if (!inFlight && !queued && lastResult) { clearInterval(t); res(lastResult); } }, 50); }); },
+    whenBuilt() { return new Promise((res) => { const t = setInterval(() => { if (!inFlight && !queued && fullDone && lastResult) { clearInterval(t); res(lastResult); } }, 50); }); },
     preset,
     resetView() { cam.auto = true; preset(mode); }
   };

@@ -77,3 +77,8 @@
 /* studio backdrop like a fashion render */
 .fit3d { background: radial-gradient(ellipse at 50% 35%, #f1f1f1 0%, #d4d4d4 55%, #a9a9a9 100%); border-radius: 24px; }
 .fit3d .fit3d-hint { color: #555; }
+
+/* measurements shown over the 3D feet close-up */
+.fit3d-measure { position: absolute; left: 16px; right: 16px; top: 64px; display: grid; gap: 2px; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.86); backdrop-filter: blur(8px); font-size: 13px; color: #0a0a0a; pointer-events: none; }
+.fit3d-measure strong { font-size: 15px; font-weight: 800; }
+.fit3d-measure em { font-style: normal; font-size: 11px; color: #6a6a6a; }

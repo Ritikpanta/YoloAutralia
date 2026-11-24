@@ -192,7 +192,7 @@ function toMetres(m, H) { for (let i = 0; i < m.P.length; i++) m.P[i] *= H; retu
 
 /* opts: { heightCm, weightKg, fit (from footAndShoe), st (shoe style: sole, heel, collar, boot) }
    returns the build factor, volumes, placement values and three meshes in metres. */
-export function buildFigure({ heightCm, weightKg, fit, st }) {
+export function buildFigure({ heightCm, weightKg, fit, st, draft = false, sKnown = null }) {
     const H = heightCm / 100;
     // foot, in stature units, from the measured / estimated foot (slightly slimmer than the shoe)
     const fL = fit.footCm / 100 / H, fB = fit.breadthCm / 100 / H;
@@ -201,17 +201,20 @@ export function buildFigure({ heightCm, weightKg, fit, st }) {
     // build factor: bisection on the measured volume of the body field
     const lo = [-0.22, -0.01, -0.14], hi = [0.22, 1.01, 0.16];
     const targetV = weightKg / RHO / (H * H * H);
-    const volAt = (s) => { const pr = bodyPrims(s, foot); return fieldVolume((x, y, z) => evalPrims(pr, x, y, z), lo, hi, 0.0145); };
+    const volAt = (s) => { const pr = bodyPrims(s, foot); return fieldVolume((x, y, z) => evalPrims(pr, x, y, z), lo, hi, draft ? 0.024 : 0.0145); };
+    let s = sKnown;
+    if (!s) {
     // start from a bracket around the BMI-based guess, then bisect
     const guess = Math.pow(weightKg / (H * H) / 22, 0.62) * 0.93;
     let a = clamp(guess - 0.12, 0.72, 1.9), b = clamp(guess + 0.12, 0.72, 1.9);
     if (volAt(a) > targetV) a = 0.72; if (volAt(b) < targetV) b = 1.9;
-    for (let i = 0; i < 8; i++) { const m = (a + b) / 2; if (volAt(m) < targetV) a = m; else b = m; }
-    const s = (a + b) / 2;
+    for (let i = 0; i < (draft ? 6 : 8); i++) { const m = (a + b) / 2; if (volAt(m) < targetV) a = m; else b = m; }
+      s = (a + b) / 2;
+    }
     const prims = bodyPrims(s, foot);
     const B = (x, y, z) => evalPrims(prims, x, y, z);
     const g = (e) => Math.pow(s, e);
-    const step = 0.0048;
+    const step = draft ? 0.0085 : 0.0048;
 
     // ---- body ----
     const body = surfaceNets(B, [-0.2 - 0.02 * (s - 1), -0.005, -0.13 - 0.03 * (s - 1)], [0.2 + 0.02 * (s - 1), 1.008, 0.15 + 0.04 * (s - 1)], step);
@@ -229,30 +232,35 @@ export function buildFigure({ heightCm, weightKg, fit, st }) {
 
     // ---- oversized tee ----
     const hem = 0.468, ex = 0.092 * g(1.1) + 0.042, ez = 0.066 * g(1.15) + 0.034 + 0.6 * 0.012 * Math.max(0, s - 1), cz = 0.0;
-    const sleeve = [1, -1].map((sx) => ({ a: [0.088 * sx, 0.786, -0.008], b: [0.133 * sx, 0.668, -0.004], r: 0.03 * g(1.05) + 0.02 }));
+    const sleeve = [1, -1].map((sx) => ({ a: [0.088 * sx, 0.786, -0.008], b: [0.133 * sx, 0.668, -0.004], r: 0.03 * g(1.05) + 0.016 }));
     const Tee = (x, y, z) => {
-      let d = Math.abs(x) > 0.15 ? 1 : Math.max(B(x, y, z) - 0.011, Math.abs(x) - 0.113);
+      let d = Math.abs(x) > 0.155 ? 1 : Math.max(B(x, y, z) - 0.011, Math.min(Math.abs(x) - 0.113, Math.max(0.745 - y, Math.abs(x) - 0.15)));     // torso, plus the shoulder caps
       // crew neck opening, a little lower at the front
       const neckY = 0.792 - 0.016 * smooth((z + 0.005) / 0.04);
-      d = smax(d, -smax(Math.hypot(x, z + 0.006) - 0.049, neckY - y, 0.006), 0.005);
+      d = smax(d, -smax(Math.hypot(x, z + 0.006) - 0.049, neckY - y, 0.012), 0.01);
       // boxy body: hangs straight from the chest, slight flare to the hem
-      const fl = 1 + Math.max(0, 0.69 - y) * 0.35;
+      const fl = 1 + Math.max(0, 0.69 - y) * 0.1;
       const q = Math.hypot(x / (ex * fl), (z - cz) / (ez * fl));
-      const tube = smax((q - 1) * Math.min(ex, ez) * fl, y - 0.79, 0.07);
-      d = smin(d, tube, 0.03);
+      const tube = smax((q - 1) * Math.min(ex, ez) * fl, y - 0.75, 0.07);
+      d = smin(d, tube, 0.045);
       // drop-shoulder short sleeves
       for (const sl of sleeve) {
-        const cyl = sdCappedCone(x, y, z, sl.a, sl.b, sl.r, sl.r + 0.003);
+        const cyl = sdCappedCone(x, y, z, sl.a, sl.b, sl.r - 0.005, sl.r - 0.002) - 0.005;   // rounded sleeve hem
         d = smin(d, cyl, 0.03);
       }
       d = smax(d, hem - y, 0.008);
       // folds: gravity folds below the chest, drag lines from the armpits, soft creases on the sleeves
       const th = Math.atan2(z - cz, x);
-      d += 0.0042 * Math.sin(th * 7 + 2.3 * Math.sin(y * 29)) * smooth((0.72 - y) / 0.16);
-      d += 0.0015 * Math.sin(th * 15 + y * 60) * smooth((0.62 - y) / 0.1);
+      // a few long, soft vertical folds that relax toward the hem
+      d += 0.0022 * Math.sin(th * 5 + 0.7 * Math.sin(y * 14)) * smooth((0.7 - y) / 0.12);
+      // rib collar: a rounded band around the neckline
+      { const nr = Math.hypot(x, z + 0.006) - 0.051, ny = y - (0.792 - 0.016 * smooth((z + 0.005) / 0.04)) - 0.004;
+        d = smin(d, Math.hypot(nr, ny) - 0.007, 0.007); }
+      // hem band: the last 2 cm sit slightly proud, with a crisp edge
+      d -= 0.0012 * smooth((hem + 0.021 - y) / 0.003);
       const ax = Math.abs(x) - 0.088, ay = y - 0.71;
-      d += 0.0016 * Math.sin((y + Math.abs(x) * 0.9) * 110) * Math.exp(-(ax * ax + ay * ay) / 0.0012);
-      d += 0.0012 * Math.sin(y * 140 + Math.abs(x) * 40) * smooth((Math.abs(x) - 0.105) / 0.02) * smooth((y - 0.66) / 0.02);
+      d += 0.0009 * Math.sin((y + Math.abs(x) * 0.9) * 110) * Math.exp(-(ax * ax + ay * ay) / 0.0012);
+      d += 0.0006 * Math.sin(y * 140 + Math.abs(x) * 40) * smooth((Math.abs(x) - 0.105) / 0.02) * smooth((y - 0.66) / 0.02);
       return d;
     };
     const tee = surfaceNets(Tee, [-0.215 - 0.03 * (s - 1), hem - 0.008, -0.13 - 0.03 * (s - 1)], [0.215 + 0.03 * (s - 1), 0.85, 0.15 + 0.05 * (s - 1)], step);
@@ -282,7 +290,7 @@ export function buildFigure({ heightCm, weightKg, fit, st }) {
     const lift = st.sole + st.heel * 0.7 - 0.003 * H;                     // metres: stand on the insole
     const hemGround = st.boot ? 0.075 : Math.max(0.05, st.collar * 0.95);  // trouser hem height above the floor (m)
     const pHem = clamp((hemGround - lift) / H, 0.012, 0.08);
-    const legTop = 0.054 * g(1.2) + 0.016, legHem = 0.05 + 0.006 * Math.max(0, s - 1);
+    const legTop = 0.054 * g(1.2) + 0.016, legHem = 0.046 + 0.006 * Math.max(0, s - 1);
     const Pants = (x, y, z) => {
       let seat = y < 0.37 || y > 0.65 || Math.abs(x) > 0.16 ? 1 : B(x, y, z) - 0.0105;
       seat = smax(smax(Math.max(seat, Math.abs(x) - 0.128), y - 0.618, 0.01), 0.4 - y, 0.03);
@@ -296,9 +304,12 @@ export function buildFigure({ heightCm, weightKg, fit, st }) {
       d = smax(d, pHem - y, 0.008);
       // vertical drape folds, and a soft break where the hem meets the shoe
       const sx = x >= 0 ? 1 : -1, th = Math.atan2(z, x - 0.06 * sx);
-      d += 0.0028 * Math.sin(th * 6 + 2 * Math.sin(y * 21 + sx)) * smooth((0.42 - y) / 0.3);
-      d += 0.0011 * Math.sin(y * 260) * smooth((pHem + 0.04 - y) / 0.035);
-      d += 0.0012 * Math.sin((y - Math.abs(x) * 0.6) * 160) * smooth((y - 0.44) / 0.02) * smooth((0.5 - y) / 0.03); // crotch whiskers
+      d += 0.0014 * Math.sin(th * 4 + 1.5 * Math.sin(y * 12 + sx)) * smooth((0.42 - y) / 0.3);
+      // pressed crease down the front of each leg
+      { const da = th - Math.PI / 2; d -= 0.0016 * Math.exp(-(da * da) / 0.012) * smooth((0.47 - y) / 0.05); }
+      // a gentle break where the hem rests on the shoe
+      d -= 0.0018 * Math.exp(-(((y - pHem - 0.03) / 0.012) ** 2)) * Math.max(0, Math.sin(th));
+      d += 0.0006 * Math.sin((y - Math.abs(x) * 0.6) * 160) * smooth((y - 0.44) / 0.02) * smooth((0.5 - y) / 0.03); // crotch whiskers
       return d;
     };
     const pants = surfaceNets(Pants, [-0.15 - 0.03 * (s - 1), pHem - 0.006, -0.13 - 0.03 * (s - 1)], [0.15 + 0.03 * (s - 1), 0.63, 0.14 + 0.04 * (s - 1)], step);
