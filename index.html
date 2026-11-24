@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdn2.blanxer.com">
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&family=Poppins:wght@300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/css/styles.css">
 </head>
 <body data-page="home">
@@ -23,26 +23,30 @@
 
   <main>
     <section class="hero" id="hero">
-      <div class="grid-bg"></div>
+      <div class="run-stage" id="run-stage">
+        <div class="run-tilt">
+          <div class="runner" id="runner">
+            <div class="hop"><img class="photo" alt="" fetchpriority="high" draggable="false"></div>
+            <div class="shadow" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>
       <div class="wrap hero-inner">
         <div class="hero-copy">
-          <span class="badge" id="hero-badge"><i></i>Best seller</span>
-          <h1 id="hero-name">Atlas Chelsea</h1>
-          <p class="sub" id="hero-sub">Boot</p>
-          <p id="hero-desc" class="hero-desc"></p>
-          <div class="offer" id="hero-offer"></div>
-          <div class="hero-actions"><a class="btn btn-primary" id="hero-cta" href="/shop">Shop now</a><a class="btn" href="/shop">See all styles</a></div>
-        </div>
-        <div class="run-stage" id="run-stage">
-          <div class="run-tilt">
-            <div class="runner" id="runner">
-              <div class="hop"><img class="photo" alt="" fetchpriority="high" draggable="false"></div>
-              <div class="shadow" aria-hidden="true"></div>
-            </div>
+          <span class="badge rise" id="hero-badge"><i></i>Best seller</span>
+          <h1 id="hero-name" class="split">Atlas Chelsea</h1>
+          <p class="sub rise" id="hero-sub">Boot</p>
+          <p id="hero-desc" class="hero-desc rise"></p>
+          <div class="offer rise" id="hero-offer"></div>
+          <div class="hero-actions rise">
+            <a class="btn btn-primary magnetic" id="hero-cta" href="/shop">Shop now</a>
+            <a class="btn magnetic" id="hero-try" href="/try-on">Try it on</a>
           </div>
-          <button class="replay" id="replay" type="button">Walk again ↺</button>
-          <span class="hero-hint">Move your mouse to look around · tap a boot</span>
         </div>
+      </div>
+      <div class="wrap hero-controls">
+        <span class="hero-hint">Scroll to speed up · move to look around · tap a boot</span>
+        <button class="replay" id="replay" type="button">Walk again ↺</button>
       </div>
     </section>
 
@@ -62,6 +66,20 @@
           <div><p class="eyebrow">Featured</p><h2>Popular styles</h2></div>
         </div>
         <div class="grid" id="featured"></div>
+      </div>
+    </section>
+
+    <section class="block" style="padding-top:0">
+      <div class="wrap">
+        <div class="teaser reveal">
+          <div>
+            <p class="eyebrow" style="color:rgba(255,255,255,.6)">New</p>
+            <h2>Try before you buy</h2>
+            <p>Enter your height, weight and foot length to get your size, then see the shoe on a figure scaled to you or over your own feet with your phone camera.</p>
+            <div class="hero-actions"><a class="btn btn-primary magnetic" href="/try-on">Find my size</a></div>
+          </div>
+          <div class="teaser-art" aria-hidden="true"><span class="ring"></span><img src="/assets/img/products/odin.webp" alt=""><span class="size-chip">EU 42</span></div>
+        </div>
       </div>
     </section>
 

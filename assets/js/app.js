@@ -146,7 +146,7 @@ function renderChrome() {
   const page = document.body.dataset.page || "";
   const cat = new URLSearchParams(location.search).get("c");
   const link = (href, label, current) => `<a href="${href}"${current ? ' aria-current="page"' : ""}>${label}</a>`;
-  const logo = `<a class="logo" href="/" aria-label="YOLO Australia home"><span>Y</span><span>O</span><span>L</span><span>O</span></a>`;
+  const logo = `<a class="brand" href="/" aria-label="YOLO Australia home"><span class="logo" aria-hidden="true"><span>Y</span><span>O</span><span>L</span><span>O</span></span><span class="wordmark">Australia</span></a>`;
   const header = $("#site-header");
   if (header) {
     header.innerHTML = `
@@ -155,10 +155,11 @@ function renderChrome() {
         <nav class="nav" id="nav" aria-label="Main">
           ${link("/shop", "Shop all", page === "shop" && !cat)}
           ${Object.entries(CATEGORIES).map(([k, v]) => link(`/shop?c=${k}`, v.label, page === "shop" && cat === k)).join("")}
+          ${link("/try-on", "Try on", page === "try-on")}
           ${link("/contact", "Contact", page === "contact")}
         </nav>
         <div class="header-actions">
-          <button class="cart-btn" type="button" aria-label="Open cart">Cart <span class="count">0</span></button>
+          <button class="cart-btn" type="button" aria-label="Open cart"><span class="label">Cart</span> <span class="count">0</span></button>
           <button class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="nav"><span></span><span></span><span></span></button>
         </div>
       </div>`;
@@ -229,12 +230,36 @@ function bindReveal(root = document) {
   items.forEach((el, i) => { el.style.transitionDelay = `${(i % 4) * 70}ms`; revealObserver.observe(el); });
 }
 
+/* ---------- Motion helpers ---------- */
+function splitTitle(el, text) {
+  if (!el) return;
+  el.setAttribute("aria-label", text);
+  let i = 0;
+  el.innerHTML = text.split(" ").map((w) => `<span class="word" aria-hidden="true">${[...w].map((c) => `<span class="ch" style="animation-delay:${0.2 + 0.035 * i++}s">${esc(c)}</span>`).join("")}</span>`).join(" ");
+}
+function bindMagnetic() {
+  if (reduceMotion || !canHover) return;
+  $$(".magnetic").forEach((el) => {
+    el.addEventListener("pointermove", (e) => {
+      const r = el.getBoundingClientRect();
+      el.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * 0.25}px, ${(e.clientY - r.top - r.height / 2) * 0.35}px)`;
+    });
+    el.addEventListener("pointerleave", () => { el.style.transform = ""; });
+  });
+}
+function bindProgress() {
+  const bar = document.createElement("div"); bar.className = "progress"; document.body.appendChild(bar);
+  const upd = () => { const h = document.documentElement.scrollHeight - innerHeight; bar.style.width = `${h > 0 ? (scrollY / h) * 100 : 0}%`; };
+  addEventListener("scroll", upd, { passive: true }); upd();
+}
+
 /* ---------- Landing hero ---------- */
 function initHero() {
   const hero = $("#hero");
   const p = bySlug(offer.slug) || PRODUCTS[0];
   if (!hero || !p) return;
-  $("#hero-name").textContent = p.name.replace(/\s+boot$/i, "");
+  splitTitle($("#hero-name"), p.name.replace(/\s+boot$/i, ""));
+  const tryBtn = $("#hero-try"); if (tryBtn) tryBtn.href = `/try-on?m=${encodeURIComponent(p.slug)}`;
   $("#hero-sub").textContent = /boot$/i.test(p.name) ? "Boot" : CATEGORIES[p.category].label;
   $("#hero-desc").textContent = p.description || "";
   $("#hero-badge").innerHTML = `<i></i>${onSale(p) ? "On sale" : "Best seller"}`;
@@ -362,7 +387,7 @@ function initProduct() {
   $('meta[name="description"]')?.setAttribute("content", `${p.name} by YOLO. ${aud(priceNow(p))}. ${p.description || CATEGORIES[p.category].blurb} Shipped across Australia.`);
 
   let colour = p.colourways.find((c) => c.slug === params.get("c")) || p.colourways[0] || null;
-  let size = null, live = null; // live: from /api/stock
+  let size = SIZES.includes(Number(params.get("s"))) ? Number(params.get("s")) : null, live = null; // live: from /api/stock
 
   root.innerHTML = `
     <div class="gallery">
@@ -388,7 +413,7 @@ function initProduct() {
       <p class="size-note" id="size-note"></p>
       <div class="enquire">
         <button class="btn btn-primary" id="add-btn" type="button">Add to cart</button>
-        <a class="btn" id="ask-btn" href="/contact">Ask a question</a>
+        <a class="btn" id="try-btn" href="/try-on?m=${encodeURIComponent(p.slug)}">Try it on</a>
       </div>
       <p class="size-note" id="add-msg" role="status"></p>
       <ul class="pdp-points">
@@ -461,7 +486,7 @@ function initProduct() {
     const addBtn = $("#add-btn");
     addBtn.disabled = !anyStock;
     addBtn.textContent = !anyStock ? "Sold out" : size ? `Add to cart — EU ${size}` : "Add to cart";
-    $("#ask-btn").href = `/contact?m=${encodeURIComponent(p.slug)}${colour ? "&c=" + encodeURIComponent(colour.slug) : ""}${size ? "&s=" + size : ""}`;
+    $("#try-btn").href = `/try-on?m=${encodeURIComponent(p.slug)}`;
   }
 
   $("#add-btn").addEventListener("click", () => {
@@ -534,7 +559,7 @@ function boot() {
   renderChrome();
   mountCart();
   initHero(); initHome(); initShop(); initProduct(); initContact(); initSuccess();
-  bindTilt(); bindReveal();
+  bindTilt(); bindReveal(); bindMagnetic(); bindProgress();
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 

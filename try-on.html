@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Try it on — YOLO Australia</title>
+  <meta name="description" content="Find your YOLO size from your height, weight and foot length, see the shoes on a figure scaled to you, or try them over your own feet with your phone camera.">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&family=Poppins:wght@300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <link rel="stylesheet" href="/assets/css/tryon.css">
+</head>
+<body data-page="try-on">
+  <header class="site-header" id="site-header"></header>
+  <main>
+    <section class="page-head">
+      <div class="wrap">
+        <p class="eyebrow">Try it on</p>
+        <h1>See it on you</h1>
+        <p class="lede" style="margin-top:16px">Enter your height, weight and foot length. We'll suggest your size and show the shoe on a figure scaled to you. Or use your phone camera to see it over your own feet.</p>
+      </div>
+    </section>
+
+    <div class="wrap tryon">
+      <form class="tryon-form" id="tryon-form" novalidate>
+        <label class="field">
+          <span>Shoe</span>
+          <select id="t-shoe" class="pref-select"></select>
+        </label>
+
+        <label class="field">
+          <span>Height <b id="t-height-val">175 cm</b></span>
+          <input type="range" id="t-height" min="140" max="210" step="1" value="175">
+        </label>
+
+        <label class="field">
+          <span>Weight <b id="t-weight-val">75 kg</b></span>
+          <input type="range" id="t-weight" min="40" max="150" step="1" value="75">
+        </label>
+
+        <div class="field">
+          <span>Foot length</span>
+          <div class="foot-row">
+            <input type="number" id="t-foot" inputmode="decimal" min="20" max="32" step="0.1" placeholder="e.g. 26.5" aria-label="Foot length in centimetres">
+            <span class="unit">cm</span>
+          </div>
+          <details class="howto">
+            <summary>How to measure</summary>
+            <p>Stand on a sheet of paper with your heel against a wall. Mark the tip of your longest toe, then measure from the wall to the mark. Measure both feet and use the longer one. If you leave this blank, we'll estimate from your height.</p>
+          </details>
+        </div>
+
+        <div class="result" id="t-result" aria-live="polite">
+          <p class="eyebrow">Your size</p>
+          <div class="result-size"><span id="t-eu">EU 42</span><small id="t-alt"></small></div>
+          <p class="result-note" id="t-note"></p>
+        </div>
+
+        <div class="tryon-actions">
+          <a class="btn btn-primary" id="t-shop" href="/shop">Choose colour &amp; add to cart</a>
+          <button class="btn" type="button" id="t-camera">Try with your camera</button>
+        </div>
+        <p class="fineprint">The figure and close-up are a visual guide. Proportions are approximate and nothing you enter leaves your device.</p>
+      </form>
+
+      <div class="tryon-view">
+        <div class="view-tabs" role="tablist" aria-label="View">
+          <button type="button" role="tab" aria-selected="true" data-view="figure">On you</button>
+          <button type="button" role="tab" aria-selected="false" data-view="foot">Foot close-up</button>
+        </div>
+        <div class="view-stage" id="t-stage">
+          <svg id="t-figure" viewBox="0 0 600 700" role="img" aria-label="Figure scaled to your height and weight, wearing the selected shoe"></svg>
+          <svg id="t-foot-view" viewBox="0 0 600 700" role="img" aria-label="Side view of your foot length against the shoe" hidden></svg>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Camera try-on -->
+  <div class="cam" id="cam" hidden aria-modal="true" role="dialog" aria-label="Try with your camera">
+    <video id="cam-video" playsinline muted autoplay></video>
+    <img id="cam-shoe" alt="" draggable="false">
+    <div class="cam-top">
+      <p>Point your camera at your feet. Drag the shoe over your foot, then pinch or use the sliders to match the size.</p>
+      <button class="icon-btn" type="button" id="cam-close" aria-label="Close camera">×</button>
+    </div>
+    <div class="cam-controls">
+      <label>Size <input type="range" id="cam-scale" min="0.2" max="2.5" step="0.01" value="1"></label>
+      <label>Turn <input type="range" id="cam-rot" min="-60" max="60" step="1" value="0"></label>
+      <button class="btn" type="button" id="cam-flip">Flip</button>
+      <button class="btn btn-primary" type="button" id="cam-snap">Take photo</button>
+    </div>
+    <div class="cam-shot" id="cam-shot" hidden>
+      <img id="cam-shot-img" alt="Your try-on photo">
+      <div class="cam-shot-actions"><a class="btn btn-primary" id="cam-save" download="yolo-try-on.jpg">Save photo</a><button class="btn" type="button" id="cam-retake">Retake</button></div>
+    </div>
+    <p class="cam-msg" id="cam-msg" hidden></p>
+  </div>
+
+  <footer class="site-footer" id="site-footer"></footer>
+  <script src="/assets/js/config.js"></script>
+  <script type="module" src="/lib/catalog.js"></script>
+  <script type="module" src="/lib/shop-config.js"></script>
+  <script type="module" src="/assets/js/app.js"></script>
+  <script type="module" src="/assets/js/tryon.js"></script>
+</body>
+</html>
