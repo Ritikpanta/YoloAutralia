@@ -507,7 +507,7 @@ function initProduct() {
       <div class="section-head"><div><p class="eyebrow">Try it on</p><h2>See ${esc(p.name)} on you</h2></div></div>
       <div id="pdp-fit"></div>
     </section>`);
-  import("/assets/js/tryon.js?v=7").then(({ mountFitPanel }) => {
+  import("/assets/js/tryon.js?v=8").then(({ mountFitPanel }) => {
     fitPanel = mountFitPanel(document.getElementById("pdp-fit"), {
       products: PRODUCTS, slug: p.slug,
       getColour: () => (colour ? { hex: colour.hex, name: colour.name } : null),

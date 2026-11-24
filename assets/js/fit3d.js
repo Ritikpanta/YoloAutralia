@@ -1,19 +1,13 @@
-/* 3D try-on: a unisex mannequin built from the customer's height, weight and foot length,
-   wearing a 3D model of the chosen shoe. Drag to rotate, scroll / pinch to zoom.
+/* 3D try-on: a unisex fashion mannequin built from the customer's height, weight and foot length,
+   dressed in the Phool tee and wide-leg trousers, wearing a 3D model of the chosen shoe.
+   Drag to rotate, scroll / pinch to zoom.
 
-   The maths
-   ---------
-   • Segment lengths: anthropometric ratios of stature H (Drillis & Contini, 1966), averaged
-     between male and female values so the figure is unisex. e.g. shoulder 0.818H, hip joint 0.50H,
-     knee 0.285H, ankle 0.045H, shoulder breadth 0.245H, foot length 0.152H.
-   • Girths: every cross-section starts from a reference profile (fractions of H). One "build"
-     factor s scales the radii, with region-specific exponents (waist and hips change most with
-     weight, wrists and ankles least). s is solved by bisection so that the model's volume equals
-     the customer's body volume:  V = weight / ρ,  ρ ≈ 1010 kg/m³ (average whole-body density).
-   • Feet & shoes: foot length = input, or 0.152H if not given. Foot breadth ≈ 0.39 × length,
-     widening slightly with BMI. EU size = 1.5 × (foot cm + 1.5) (Paris point = ⅔ cm), shoe
-     inside length = EU / 1.5 cm, outer length ≈ inside + 1.2 cm.
-   All units in metres. */
+   The body and clothes are built in fit3d-geom.js (signed-distance sculpture + surface nets,
+   build factor solved so volume = weight / 1010 kg/m³), in a Web Worker via fit3d-worker.js.
+   This file owns the studio scene: image-based light, soft shadows, cotton materials, true-size
+   prints, the shoe models and the orbit camera.
+
+   Foot and size maths are below (footAndShoe). */
 
 const THREE_URL = "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 const RHO = 1010;                       // kg/m³
@@ -272,21 +266,40 @@ export function sampleUpperColour(img) {
 }
 
 /* ---------------- scene ---------------- */
+/* ---------------- scene: a sculpted fashion mannequin, dressed, in studio light ----------------
+   The body is a smooth signed-distance sculpture (ellipsoids and tapered capsules for each muscle
+   group, blended with a smooth union), meshed with surface nets. Everything is in units of
+   stature H, so height scales the whole figure. Weight drives one build factor s: every girth is
+   multiplied by s^e (e = how much that region gains with weight: waist and belly most, wrists and
+   head least), and s is solved by bisection so the mesh's measured volume equals
+   V = weight / 1010 kg/m³.
+   Clothes are sculpted around the body the same way: an oversized boxy tee that hangs from the
+   chest (not the waist) with drop-shoulder sleeves, gravity folds and true-size prints, and
+   wide-leg trousers with vertical drape and a break at the hem. Studio image-based lighting plus a
+   soft shadow-mapped key light give the fabric real shading and contact shadows. */
+
+const ADDONS = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/";
+const PRINT_FRONT = "/assets/img/apparel/phool-front.png";
+const PRINT_BACK = "/assets/img/apparel/phool-back.png";
+
 export async function createFit3D(container) {
   try { return await createFit3DUnsafe(container); }
   catch (e) { console.info("3D try-on unavailable:", e?.message || e); container.querySelector("canvas.fit3d-canvas")?.remove(); return null; }
 }
-async function createFit3DUnsafe(container) {
-  let THREE;
-  try { THREE = await Promise.race([import(THREE_URL), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 8000))]); }
-  catch (e) { return null; }
-  try { const t = document.createElement("canvas"); if (!(t.getContext("webgl2") || t.getContext("webgl"))) return null; } catch { return null; }
 
+async function createFit3DUnsafe(container) {
+  try { const t = document.createElement("canvas"); if (!(t.getContext("webgl2") || t.getContext("webgl"))) return null; } catch { return null; }
+  const timeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error("timeout")), ms))]);
+  const [THREE, { RoomEnvironment }] = await timeout(Promise.all([import(THREE_URL), import(ADDONS + "environments/RoomEnvironment.js")]), 12000);
+  const loadImage = (src) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  const printsP = Promise.all([loadImage(PRINT_FRONT), loadImage(PRINT_BACK)]);
+
+  // ---------- renderer & studio ----------
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 0.8;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const canvas = renderer.domElement;
@@ -295,246 +308,161 @@ async function createFit3DUnsafe(container) {
   container.prepend(canvas);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 50);
-  {
-    const env = new THREE.Scene();
-    const room = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 10), new THREE.MeshBasicMaterial({ color: 0x9a9a9a, side: THREE.BackSide }));
-    env.add(room);
-    const panel = (w, h, x, y, z, ry, v) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(v, v, v), side: THREE.DoubleSide })); m.position.set(x, y, z); m.rotation.y = ry; env.add(m); };
-    panel(4, 2.5, 0, 1.5, 4.9, Math.PI, 3.2); panel(2.5, 3, -4.9, 1.2, 0, Math.PI / 2, 2.2); panel(3, 0.6, 0, 2.95, 0, 0, 2.5);
-    const pm = new THREE.PMREMGenerator(renderer);
-    scene.environment = pm.fromScene(env, 0.04).texture;
-    pm.dispose();
-  }
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xb8b8b8, 1.5));
-  const fill = new THREE.DirectionalLight(0xffffff, 0.9); fill.position.set(-2.5, 1.6, 2); scene.add(fill);
-  const key = new THREE.DirectionalLight(0xffffff, 2.2);
-  key.position.set(1.6, 3.2, 2.4); key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024); key.shadow.camera.left = -1.2; key.shadow.camera.right = 1.2; key.shadow.camera.top = 2.4; key.shadow.camera.bottom = -0.2; key.shadow.radius = 4;
-  scene.add(key);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.8); rim.position.set(-2, 2, -2.5); scene.add(rim);
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(1.6, 64), new THREE.ShadowMaterial({ opacity: 0.16 }));
-  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.553, 96), new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0.15 }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.001; scene.add(ring);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+  scene.environmentIntensity = 0.3;
+  const camera = new THREE.PerspectiveCamera(28, 1, 0.05, 50);
 
-  // fashion-render mannequin: matte grey body, glossy dark face and hands
-  const skin = new THREE.MeshStandardMaterial({ color: 0xbdbdbd, roughness: 0.62, metalness: 0 });
-  const chrome = new THREE.MeshPhysicalMaterial({ color: 0x4a4a4e, roughness: 0.12, metalness: 0.85, clearcoat: 1, clearcoatRoughness: 0.05 });
-  const fabricWhite = new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 0.92, side: THREE.DoubleSide });
-  const fabricGrey = new THREE.MeshStandardMaterial({ color: 0x8b8b8b, roughness: 0.95, side: THREE.DoubleSide });
-  // tee prints (front chest logo + back artwork)
-  const loadImage = (src) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
-  const [printBack, printFront] = await Promise.all([loadImage("/assets/img/apparel/phool-back.png"), loadImage("/assets/img/apparel/phool-front.png")]);
+  const key = new THREE.DirectionalLight(0xfffaf2, 3.4);
+  key.position.set(2.8, 3.2, 1.1);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  Object.assign(key.shadow.camera, { left: -0.8, right: 0.8, top: 2.2, bottom: -0.2, near: 0.5, far: 8 });
+  key.shadow.bias = -0.0003; key.shadow.normalBias = 0.015; key.shadow.radius = 5;
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0xffffff, 1.2); rim.position.set(-2.4, 2.4, -2.6); scene.add(rim);
+  const fill = new THREE.DirectionalLight(0xf2f5ff, 0.45); fill.position.set(-2.5, 1.2, 2); scene.add(fill);
+
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(2.2, 64), new THREE.ShadowMaterial({ opacity: 0.3 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  const aoC = document.createElement("canvas"); aoC.width = aoC.height = 128;
+  { const g = aoC.getContext("2d"), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, "rgba(0,0,0,.42)"); gr.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); }
+  const ao = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.55), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(aoC), transparent: true, depthWrite: false }));
+  ao.rotation.x = -Math.PI / 2; ao.position.y = 0.002; scene.add(ao);
+
+  // ---------- materials ----------
+  function knitNormal(scale) {
+    const c = document.createElement("canvas"); c.width = c.height = 256; const g = c.getContext("2d");
+    const img = g.createImageData(256, 256);
+    for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
+      const i = (y * 256 + x) * 4, wale = Math.sin(x * Math.PI / 4) * 0.6, course = Math.sin(y * Math.PI / 3 + Math.sin(x * Math.PI / 8)) * 0.4, n = (Math.random() - 0.5) * 0.35;
+      img.data[i] = 128 + (wale + n) * 40 * scale; img.data[i + 1] = 128 + (course + n) * 40 * scale; img.data[i + 2] = 255; img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  }
+  const bodyMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.4, metalness: 0, clearcoat: 0.45, clearcoatRoughness: 0.22 });
   const teeCanvas = document.createElement("canvas"); teeCanvas.width = 2048; teeCanvas.height = 1024;
   const teeTex = new THREE.CanvasTexture(teeCanvas); teeTex.colorSpace = THREE.SRGBColorSpace; teeTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  const teeMat = new THREE.MeshStandardMaterial({ map: teeTex, roughness: 0.92, side: THREE.DoubleSide });
-  let figure = null;
+  const teeKnit = knitNormal(1); teeKnit.repeat.set(160, 80);
+  const teeMat = new THREE.MeshPhysicalMaterial({ map: teeTex, vertexColors: true, roughness: 0.92, sheen: 0.15, sheenRoughness: 0.9, sheenColor: new THREE.Color(0xffffff), normalMap: teeKnit, normalScale: new THREE.Vector2(0.25, 0.25), side: THREE.DoubleSide });
+  const pantsKnit = knitNormal(0.8); pantsKnit.repeat.set(60, 60);
+  const pantsMat = new THREE.MeshPhysicalMaterial({ color: 0x6f6f6c, roughness: 0.85, sheen: 0.5, sheenRoughness: 0.7, sheenColor: new THREE.Color(0xcfcfcf), normalMap: pantsKnit, normalScale: new THREE.Vector2(0.3, 0.3), side: THREE.DoubleSide });
 
-  function limb(p0, p1, r0, r1, segs = 28) {
-    const len = Math.hypot(p1.x - p0.x, p1.y - p0.y, (p1.z || 0) - (p0.z || 0));
-    const geo = new THREE.CylinderGeometry(r1, r0, len, segs, 1, true);
-    const m = new THREE.Mesh(geo, skin);
-    const a = new THREE.Vector3(p0.x, p0.y, p0.z || 0), b = new THREE.Vector3(p1.x, p1.y, p1.z || 0);
-    m.position.copy(a).add(b).multiplyScalar(0.5);
-    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
-    m.castShadow = true; return m;
-  }
-  function joint(p, r) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 18), skin); m.position.set(p.x, p.y, p.z || 0); m.castShadow = true; return m; }
-  // lathe-like lofted torso with elliptical sections
-  function torso(sections) {
-    const N = 40, pos = [], idx = [];
-    sections.forEach((s) => { for (let i = 0; i < N; i++) { const a = (i / N) * Math.PI * 2; pos.push(Math.cos(a) * s.rx, s.y, Math.sin(a) * s.rz + 0.004); } });
-    for (let k = 0; k < sections.length - 1; k++) for (let i = 0; i < N; i++) {
-      const a = k * N + i, b = k * N + (i + 1) % N, c = (k + 1) * N + i, d = (k + 1) * N + (i + 1) % N;
-      idx.push(a, d, b, a, c, d);
-    }
-    // bottom cap
-    const bc = pos.length / 3; pos.push(0, sections[0].y - 0.01, 0.004);
-    for (let i = 0; i < N; i++) idx.push(bc, i, (i + 1) % N);
-    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-    const m = new THREE.Mesh(g, skin); m.castShadow = true; return m;
-  }
+  const figure = new THREE.Group(); scene.add(figure);
+  const meshes = { body: null, tee: null, pants: null };
+  const shoes = [];
 
-  // ring-lofted shell; sections: [{y, rx, rz}] bottom->top; uv: u around (front centre u=0.25), v up
-  function loft(sections, mat, zOff = 0.004) {
-    const N = 64, pos = [], uv = [], idx = [];
-    const y0 = sections[0].y, y1 = sections[sections.length - 1].y;
-    sections.forEach((sc) => {
-      for (let i = 0; i <= N; i++) { const a = (i / N) * Math.PI * 2; pos.push(Math.cos(a) * sc.rx, sc.y, Math.sin(a) * sc.rz + zOff); uv.push(i / N, (sc.y - y0) / (y1 - y0)); }
-    });
-    for (let k = 0; k < sections.length - 1; k++) for (let i = 0; i < N; i++) {
-      const a = k * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1;
-      idx.push(a, d, b, a, c, d);
-    }
+  function setMesh(name, { P, N, I, col, uv }, mat) {
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-    g.setIndex(idx); g.computeVertexNormals();
-    const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; return m;
+    g.setAttribute("position", new THREE.BufferAttribute(P, 3));
+    g.setAttribute("normal", new THREE.BufferAttribute(N, 3));
+    if (col) g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    if (uv) g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    g.setIndex(new THREE.BufferAttribute(I, 1));
+    g.computeBoundingSphere();
+    if (meshes[name]) { figure.remove(meshes[name]); meshes[name].geometry.dispose(); }
+    const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true;
+    figure.add(m); meshes[name] = m;
   }
-  // tube along p0->p1 with a radius profile [[t, r], ...] (t: 0 at p0 .. 1 at p1)
-  function sleeve(p0, p1, profile, mat) {
-    const a = new THREE.Vector3(p0.x, p0.y, p0.z || 0), b = new THREE.Vector3(p1.x, p1.y, p1.z || 0);
-    const len = a.distanceTo(b);
-    const pts = profile.map(([t, rr]) => new THREE.Vector2(rr, (0.5 - t) * len));
-    const g = new THREE.LatheGeometry(pts, 48);
-    const m = new THREE.Mesh(g, mat);
-    m.position.copy(a).add(b).multiplyScalar(0.5);
-    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), b.clone().sub(a).normalize());
-    m.castShadow = true; return m;
-  }
-  function radiiAt(b, y) {                        // torso radii at height y (interpolated)
-    const T = b.torso;
-    if (y <= T[0].y) return { rx: T[0].rx, rz: T[0].rz };
-    for (let i = 0; i < T.length - 1; i++) if (y <= T[i + 1].y) { const t = (y - T[i].y) / (T[i + 1].y - T[i].y); return { rx: lerp(T[i].rx, T[i + 1].rx, t), rz: lerp(T[i].rz, T[i + 1].rz, t) }; }
-    return { rx: T[T.length - 1].rx, rz: T[T.length - 1].rz };
-  }
-  // draw the tee texture: white jersey, chest logo on the front (u=0.25), artwork on the back (u=0.75)
-  function paintTee(circM, heightM) {
+
+  function paintTee(front, back) {
     const g = teeCanvas.getContext("2d"), W = teeCanvas.width, Hc = teeCanvas.height;
-    g.fillStyle = "#f6f6f4"; g.fillRect(0, 0, W, Hc);
-    // soft fabric variation
-    for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(0,0,0,${0.006 + Math.random() * 0.01})`; g.fillRect(Math.random() * W, 0, 2 + Math.random() * 30, Hc); }
-    const pxPerM_u = W / circM, pxPerM_v = Hc / heightM;
-    // canvas top row = collar (texture flipY), so y is simply the distance below the collar
-    const place = (img, uCentre, belowCollarM, widthM) => {
+    g.fillStyle = "#e2e2de"; g.fillRect(0, 0, W, Hc);
+    const pxPerM = 1024 / 0.8;
+    const place = (img, uCentre, belowTopM, widthM) => {
       if (!img) return;
-      const w = widthM * pxPerM_u, h = widthM * (img.height / img.width) * pxPerM_v;
-      const x = uCentre * W - w / 2, y = belowCollarM * pxPerM_v;
-      g.save(); g.translate(x + w / 2, y + h / 2); g.scale(-1, 1); g.drawImage(img, -w / 2, -h / 2, w, h); g.restore();
+      const w = widthM * pxPerM, h = w * img.height / img.width;
+      g.drawImage(img, uCentre * W - w / 2, belowTopM * pxPerM, w, h);
     };
-    place(printFront, 0.25, 0.13, 0.10);          // chest logo: 10 cm wide, 13 cm below the collar
-    place(printBack, 0.75, 0.11, 0.31);           // back print: 31 cm wide, 11 cm below the collar
+    place(front, 0.25, 0.115, 0.105);      // chest logo, 10.5 cm wide
+    place(back, 0.75, 0.10, 0.31);         // back artwork, 31 cm wide
     teeTex.needsUpdate = true;
   }
-  function dressAndFace(b, shoe) {
-    const H = b.H, g = new THREE.Group();
-    // --- oversized tee ---
-    const sh = b.shoulder.x + b.r.upperArm * 1.25;
-    const tY = [0.405, 0.445, 0.485, 0.52, 0.555, 0.59, 0.625, 0.66, 0.7, 0.74, 0.77, 0.79, 0.805, 0.82, 0.834, 0.845, 0.853];
-    const sections = tY.map((f) => {
-      const y = f * H, t = radiiAt(b, Math.max(y, 0.54 * H));   // below the hips the tee hangs straight, it doesn't follow the body in
-      let rx = t.rx * 1.13 + 0.014, rz = t.rz * 1.16 + 0.014;
-      if (f < 0.54) { rx += (0.54 - f) * H * 0.06; rz += (0.54 - f) * H * 0.05; }   // slight A-line flare to the hem
-      if (f >= 0.785 && f < 0.8) rx = Math.max(rx, lerp(rx, sh, 0.75));
-      if (f >= 0.8 && f < 0.83) { rx = Math.max(rx, sh); rz = t.rz * 1.05 + 0.012; }
-      if (f >= 0.83) { rx = f >= 0.85 ? b.r.neck * 1.6 : lerp(sh, b.r.neck * 1.6, 0.62); rz = f >= 0.85 ? b.r.neck * 1.5 : t.rz * 1.0 + 0.008; }
-      return { y, rx, rz };
-    });
-    const ellC = (rx, rz) => Math.PI * (3 * (rx + rz) - Math.sqrt((3 * rx + rz) * (rx + 3 * rz)));   // Ramanujan
-    paintTee(ellC(sections[9].rx, sections[9].rz), sections[sections.length - 1].y - sections[0].y);
-    g.add(loft(sections, teeMat));
-    const collar = new THREE.Mesh(new THREE.TorusGeometry(1, 0.08, 10, 48), fabricWhite);
-    collar.rotation.x = Math.PI / 2; collar.scale.set(b.r.neck * 1.6, b.r.neck * 1.5, 0.01 * 1);
-    collar.position.set(0, sections[sections.length - 1].y, 0.004); g.add(collar);
-    for (const side of [-1, 1]) {              // short sleeves following the A-pose arm
-      const s0 = { x: side * (b.shoulder.x - b.r.upperArm * 0.6), y: b.shoulder.y + b.r.upperArm * 0.35 }, e = { x: side * b.elbow.x, y: b.elbow.y, z: -0.01 };
-      const s1 = { x: lerp(s0.x, e.x, 0.42), y: lerp(s0.y, e.y, 0.42), z: -0.005 };
-      g.add(sleeve(s0, s1, [[0, b.r.upperArm * 1.72], [0.45, b.r.upperArm * 1.62], [1, b.r.upperArm * 1.55]], fabricWhite));
+  printsP.then(([f, b]) => paintTee(f, b));
+  paintTee(null, null);
+
+  // ---------- build for a customer ----------
+  let buildCount = 0;
+  // geometry is built in a worker (fit3d-geom.js), then dressed here
+  let worker = null, seq = 0, inFlight = false, queued = null;
+  try { worker = new Worker(new URL("./fit3d-worker.js?v=8", import.meta.url), { type: "module" }); } catch { worker = null; }
+  let geomLocal = null;
+  async function buildGeometry(opts) {
+    if (worker) {
+      const id = ++seq;
+      const r = await new Promise((res, rej) => {
+        const on = (e) => { if (e.data.id !== id) return; worker.removeEventListener("message", on); e.data.error ? rej(new Error(e.data.error)) : res(e.data.r); };
+        worker.addEventListener("message", on);
+        worker.postMessage({ id, opts });
+      }).catch(() => null);
+      if (r) return r;
+      worker = null;                                              // worker failed: build on this thread from now on
     }
-    // --- wide-leg trousers ---
-    const wY = [0.44, 0.47, 0.5, 0.54, 0.585];
-    // waistband/seat: tapers from the hips down into the two legs so there's no open edge at the crotch
-    const thighR = b.r.thighTop * 1.08 + 0.008;   // keep the trouser top inside the tee
-    const seat = [{ y: 0.36 * H, rx: b.hip.x * 0.85 + thighR * 0.9, rz: thighR * 1.0 }, { y: 0.40 * H, rx: b.hip.x * 0.85 + thighR, rz: thighR * 1.08 }]
-      .concat(wY.map((f) => { const t = radiiAt(b, f * H); return { y: f * H, rx: t.rx * 1.04 + 0.006, rz: t.rz * 1.05 + 0.006 }; }));
-    g.add(loft(seat, fabricGrey));   // sits inside the tee hem
-    const hemY = Math.max(0.04, b.ankle.y - 0.012) + (shoe.style.boot ? 0.03 : 0);
-    for (const side of [-1, 1]) {
-      const top = { x: side * b.hip.x * 0.85, y: 0.5 * H }, hem = { x: side * (b.ankle.x + 0.01), y: hemY, z: 0.008 };
-      const wide = 0.095 + 0.012 * (b.H - 1.6);
-      g.add(sleeve(top, hem, [[0, thighR], [0.35, b.r.thighTop * 1.12 + 0.02], [0.7, wide * 0.96], [1, wide]], fabricGrey));
-    }
-    // --- faceless glossy face + glossy hands ---
-    const face = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), chrome);
-    face.scale.set(b.head.rx * 0.8, b.head.ry * 0.78, b.head.rz * 0.66);
-    face.position.set(0, b.head.y - b.head.ry * 0.08, b.head.rz * 0.42); face.castShadow = true; g.add(face);
-    return g;
+    geomLocal ||= await import("./fit3d-geom.js?v=8");
+    return geomLocal.buildFigure(opts);
   }
 
-  function build({ plan, shoe }) {
-    const keep = new Set([skin, chrome, fabricWhite, fabricGrey, teeMat]);
-    if (figure) { scene.remove(figure); figure.traverse((o) => { o.geometry?.dispose(); if (o.material && !keep.has(o.material)) o.material.dispose?.(); }); }
-    figure = new THREE.Group();
-    const b = plan;
-    // legs (with a slight natural knee line), feet turned out ~7°
-    for (const side of [-1, 1]) {
-      const hip = { x: side * b.hip.x, y: b.hip.y }, knee = { x: side * b.knee.x, y: b.knee.y, z: 0.004 }, ankle = { x: side * b.ankle.x, y: b.ankle.y, z: 0 };
-      figure.add(limb(hip, knee, b.r.thighTop, b.r.knee));
-      figure.add(joint(knee, b.r.knee));
-      const calfP = { x: lerp(knee.x, ankle.x, 0.3), y: lerp(knee.y, ankle.y, 0.3), z: -0.006 };
-      figure.add(limb(knee, calfP, b.r.knee, b.r.calf));
-      figure.add(joint(calfP, b.r.calf));
-      figure.add(limb(calfP, ankle, b.r.calf, b.r.ankle));
-      figure.add(joint(ankle, b.r.ankle));
-      figure.add(joint({ x: hip.x, y: hip.y + 0.01 }, b.r.thighTop * 0.98));
-      // arms in a relaxed A-pose
-      const sh = { x: side * b.shoulder.x, y: b.shoulder.y }, el = { x: side * b.elbow.x, y: b.elbow.y, z: -0.01 }, wr = { x: side * b.wrist.x, y: b.wrist.y, z: 0.02 };
-      // shoulder joint sits inside the tee sleeve, so no sphere here (it poked through the fabric)
-      figure.add(limb(sh, el, b.r.upperArm, b.r.elbow));
-      figure.add(joint(el, b.r.elbow));
-      figure.add(limb(el, wr, b.r.forearm, b.r.wrist));
-      figure.add(joint(wr, b.r.wrist));
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), chrome);
-      hand.scale.set(b.hand.r * 0.55, b.hand.len * 0.5, b.hand.r * 1.05);
-      hand.position.set(wr.x + side * 0.004, wr.y - b.hand.len * 0.45, 0.022); hand.castShadow = true; figure.add(hand);
-
-      // shoe on this foot: heel ~28% of the shoe behind the ankle
-      const shoeObj = buildShoe(THREE, shoe.style, shoe.L, shoe.B, shoe.colour, shoe.gloss);
-      shoeObj.position.set(ankle.x + side * 0.004, 0, -shoe.L * 0.22);
-      shoeObj.rotation.y = side * -0.11;
-      if (side < 0) shoeObj.scale.x = -1;               // mirror the left shoe
-      figure.add(shoeObj);
+  async function rebuild({ heightCm, weightKg, fit, style, colour, gloss }) {
+    const st = STYLES[style] || STYLES.loafer;
+    const g = await buildGeometry({ heightCm, weightKg, fit, st: { sole: st.sole, heel: st.heel, collar: st.collar, boot: !!st.boot } });
+    const { H, lift, heelZ } = g;
+    setMesh("body", g.body, bodyMat);
+    setMesh("tee", g.tee, teeMat);
+    setMesh("pants", g.pants, pantsMat);
+    // ---- shoes ----
+    shoes.forEach((o) => { figure.parent.remove(o); o.traverse((m) => { m.geometry?.dispose(); m.material?.dispose?.(); }); });
+    shoes.length = 0;
+    const Lm = fit.outerCm / 100, Bm = (fit.breadthCm + 1.0) / 100;
+    for (const sx of [1, -1]) {
+      const o = buildShoe(THREE, st, Lm, Bm, colour, gloss);
+      o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+      o.position.set(0.052 * sx * H, 0, heelZ);
+      if (sx < 0) o.scale.x = -1;
+      scene.add(o); shoes.push(o);
     }
-    figure.add(torso(b.torso));
-    figure.add(limb({ x: 0, y: 0.845 * b.H }, { x: 0, y: 0.895 * b.H }, b.r.neck, b.r.neck * 0.95));
-    const head = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 28), skin);
-    head.scale.set(b.head.rx, b.head.ry, b.head.rz); head.position.set(0, b.head.y, 0.006); head.castShadow = true;
-    figure.add(head);
-    figure.add(dressAndFace(b, shoe));
-    scene.add(figure);
-    target.H = b.H;
+    figure.position.y = lift;
+    target.H = H;
+    buildCount++;
+    canvas.dataset.built = String(buildCount);
+    return { s: g.s, bmi: g.bmi, targetL: g.targetL, volumeL: g.volumeL };
   }
 
-  // ---------- orbit camera (drag to rotate, wheel/pinch to zoom, presets) ----------
-  const target = { H: 1.75 }, cam = { az: 0.55, el: 0.1, dist: 1, focusY: 0.5, auto: true };
-  const want = { dist: 1, focusY: 0.5, el: 0.1 };
+  // ---------- orbit camera ----------
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const target = { H: 1.75 }, cam = { az: 0.5, el: 0.08, dist: 4, focusY: 0.9, auto: true };
+  const want = { dist: 4, focusY: 0.9, el: 0.08 };
   let mode = "full";
   function preset(m) {
     mode = m;
-    if (m === "feet") { want.dist = 0.85; want.focusY = 0.07; want.el = 0.32; }
-    else if (m === "top") { want.dist = 1.25; want.focusY = target.H * 0.7; want.el = 0.05; }
-    else { want.dist = target.H * 2.15; want.focusY = target.H * 0.5; want.el = 0.1; }
+    if (m === "feet") { want.dist = 1.0; want.focusY = 0.12; want.el = 0.28; }
+    else if (m === "top") { want.dist = 1.5; want.focusY = target.H * 0.72; want.el = 0.04; }
+    else { want.dist = target.H * 2.25; want.focusY = target.H * 0.52; want.el = 0.08; }
   }
-  let dragging = false, lx = 0, ly = 0; const ptrs = new Map(); let pinch0 = 0;
-  canvas.addEventListener("pointerdown", (e) => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, e); dragging = true; lx = e.clientX; ly = e.clientY; cam.auto = false; });
+  const ptrs = new Map(); let lx = 0, ly = 0, pinch0 = 0;
+  canvas.addEventListener("pointerdown", (e) => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, e); lx = e.clientX; ly = e.clientY; cam.auto = false; });
   canvas.addEventListener("pointermove", (e) => {
     if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, e);
-    if (ptrs.size === 2) {
-      const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-      if (pinch0) want.dist = clamp(want.dist * pinch0 / d, 0.45, 5); pinch0 = d; return;
-    }
-    cam.az -= (e.clientX - lx) * 0.009; want.el = clamp(want.el + (e.clientY - ly) * 0.005, -0.2, 1.2);
-    lx = e.clientX; ly = e.clientY;
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); if (pinch0) want.dist = clamp(want.dist * pinch0 / d, 0.5, 6); pinch0 = d; return; }
+    cam.az -= (e.clientX - lx) * 0.009; want.el = clamp(want.el + (e.clientY - ly) * 0.005, -0.2, 1.2); lx = e.clientX; ly = e.clientY;
   });
-  const up = (e) => { ptrs.delete(e.pointerId); pinch0 = 0; dragging = ptrs.size > 0; };
+  const up = (e) => { ptrs.delete(e.pointerId); pinch0 = 0; };
   canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
-  canvas.addEventListener("wheel", (e) => { e.preventDefault(); want.dist = clamp(want.dist * (1 + Math.sign(e.deltaY) * 0.1), 0.45, 5); cam.auto = false; }, { passive: false });
+  canvas.addEventListener("wheel", (e) => { e.preventDefault(); want.dist = clamp(want.dist * (1 + Math.sign(e.deltaY) * 0.1), 0.5, 6); cam.auto = false; }, { passive: false });
 
-  function resize() {
-    const w = container.clientWidth, h = container.clientHeight; if (!w || !h) return;
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
-  }
+  function resize() { const w = container.clientWidth, h = container.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   new ResizeObserver(resize).observe(container); resize();
   let visible = true; new IntersectionObserver(([en]) => { visible = en.isIntersecting; }).observe(container);
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let last = performance.now();
+  let last = performance.now(), t = 0;
   (function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     if (visible && !document.hidden) {
-      if (cam.auto && !reduce) cam.az += dt * 0.35;
-      const k = 1 - Math.pow(0.002, dt);
-      cam.dist += (want.dist - cam.dist) * k; cam.focusY += (want.focusY - cam.focusY) * k; cam.el += (want.el - cam.el) * k;
+      t += dt;
+      if (cam.auto && !reduceMotion) cam.az += dt * 0.3;
+      // breathing: a few millimetres of chest rise
+      if (!reduceMotion && meshes.tee) { const b = 1 + Math.sin(t * 1.3) * 0.004; meshes.tee.scale.set(b, 1, b); }
+      const kk = 1 - Math.pow(0.002, dt);
+      cam.dist += (want.dist - cam.dist) * kk; cam.focusY += (want.focusY - cam.focusY) * kk; cam.el += (want.el - cam.el) * kk;
       camera.position.set(Math.sin(cam.az) * Math.cos(cam.el) * cam.dist, cam.focusY + Math.sin(cam.el) * cam.dist, Math.cos(cam.az) * Math.cos(cam.el) * cam.dist);
       camera.lookAt(0, cam.focusY, 0);
       renderer.render(scene, camera);
@@ -542,16 +470,26 @@ async function createFit3DUnsafe(container) {
     requestAnimationFrame(frame);
   })(last);
 
+  // rebuilding takes a moment, so slider drags are coalesced: one build at a time, latest wins
+  let lastResult = null;
+  async function pump() {
+    if (inFlight || !queued) return;
+    inFlight = true;
+    const opts = queued; queued = null;
+    try { lastResult = await rebuild(opts); if (mode === "full") preset("full"); }
+    catch (e) { console.info("3D try-on build failed:", e?.message || e); }
+    inFlight = false;
+    pump();
+  }
   return {
-    THREE, scene, skin,
+    THREE, scene,
     setAzimuth(a) { cam.az = a; cam.auto = false; },
-    update({ heightCm, weightKg, fit, style, colour, gloss }) {
-      const body = solveBody(heightCm, weightKg);
-      build({ plan: body.plan, shoe: { style: STYLES[style] || STYLES.loafer, L: fit.outerCm / 100, B: (fit.breadthCm + 1.0) / 100, colour, gloss } });
-      if (mode === "full") preset("full");
-      canvas.setAttribute("aria-label", `3D mannequin, ${heightCm} cm and ${weightKg} kg, wearing EU ${fit.eu}. Drag to rotate.`);
-      return body;
+    update(opts) {
+      queued = opts; pump();
+      canvas.setAttribute("aria-label", `3D mannequin, ${opts.heightCm} cm and ${opts.weightKg} kg, wearing EU ${opts.fit.eu}. Drag to rotate.`);
+      return lastResult;
     },
+    whenBuilt() { return new Promise((res) => { const t = setInterval(() => { if (!inFlight && !queued && lastResult) { clearInterval(t); res(lastResult); } }, 50); }); },
     preset,
     resetView() { cam.auto = true; preset(mode); }
   };

@@ -113,7 +113,7 @@ export function mountFitPanel(root, opts) {
         <dt>Body mass index</dt><dd>${body.bmi.toFixed(1)} = ${w} kg ÷ (${(h / 100).toFixed(2)} m)²</dd>
         <dt>Body volume</dt><dd>${body.targetL.toFixed(1)} L = ${w} kg ÷ 1.01 kg/L (average body density)</dd>
         <dt>Model build factor</dt><dd>${body.s.toFixed(3)}. Girths are scaled until the 3D model's volume is ${body.volumeL.toFixed(1)} L</dd>
-        <dt>Proportions</dt><dd>Leg (hip joint) ${(0.5 * h).toFixed(0)} cm · knee ${(0.285 * h).toFixed(0)} cm · shoulder ${(0.815 * h).toFixed(0)} cm (ratios of height)</dd>
+        <dt>Proportions</dt><dd>Hip joint ${(0.505 * h).toFixed(0)} cm · knee ${(0.285 * h).toFixed(0)} cm · shoulder ${(0.78 * h).toFixed(0)} cm (ratios of height). The mannequin is sculpted from smooth muscle-group shapes, and every girth scales with the build factor</dd>
         <dt>Foot</dt><dd>${fit.footCm} cm long × ${fit.breadthCm.toFixed(1)} cm wide${fit.estimated ? " (estimated as 15.2% of height)" : ""}</dd>
         <dt>Size</dt><dd>EU = 1.5 × (${fit.footCm} + 1.5) = ${fit.euExact.toFixed(2)} → EU ${fit.eu}</dd>
         <dt>Shoe</dt><dd>${fit.insideCm.toFixed(1)} cm inside, ${fit.outerCm.toFixed(1)} cm outside · ${fit.roomCm.toFixed(1)} cm toe room</dd>
