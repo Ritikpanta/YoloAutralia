@@ -32,7 +32,33 @@ export function mountFitPanel(root, opts) {
       <div class="field">
         <span>Foot length</span>
         <div class="foot-row"><input type="number" data-k="f" inputmode="decimal" min="20" max="32" step="0.1" placeholder="e.g. 26.5" aria-label="Foot length in centimetres"><span class="unit">cm</span></div>
-        <details class="howto"><summary>How to measure</summary><p>Stand on paper with your heel against a wall, mark the tip of your longest toe and measure from the wall to the mark. Use your longer foot. Leave it blank and we'll estimate from your height.</p></details>
+        <details class="howto"><summary>How to measure</summary>
+          <svg class="howto-art" viewBox="0 0 520 250" role="img" aria-label="A bare foot standing on paper with the heel against a wall. A mark at the tip of the longest toe, and a ruler from the wall to the mark shows the foot length.">
+            <defs><marker id="ht-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0a0a0a"/></marker></defs>
+            <rect x="0" y="0" width="520" height="250" rx="18" fill="#f4f4f2"/>
+            <rect x="40" y="20" width="18" height="170" fill="#0a0a0a"/>
+            <text x="49" y="14" font-size="11" text-anchor="middle" fill="#6a6a6a">Wall</text>
+            <line x1="20" x2="500" y1="190" y2="190" stroke="#0a0a0a" stroke-opacity=".3"/>
+            <path d="M58 186 L430 186 L436 196 L58 196 Z" fill="#ffffff" stroke="#0a0a0a" stroke-opacity=".35"/>
+            <text x="300" y="214" font-size="11" text-anchor="middle" fill="#6a6a6a">Sheet of paper on a hard floor</text>
+            <path d="M118 6 C 116 60, 108 96, 92 122 C 72 140, 60 158, 62 176 C 63 184, 70 186, 80 186 L 384 186 C 397 186, 399 169, 386 163 C 350 151, 262 137, 188 118 C 170 112, 160 96, 158 60 L 157 6 Z" fill="#ffffff" stroke="#0a0a0a" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M152 112 q8 6 4 16" fill="none" stroke="#0a0a0a" stroke-opacity=".35" stroke-width="1.4"/>
+            <path d="M330 152 q6 -8 14 -4 M352 156 q6 -8 13 -3 M370 160 q5 -6 11 -2" fill="none" stroke="#0a0a0a" stroke-opacity=".45" stroke-width="1.4"/>
+            <line x1="396" x2="396" y1="150" y2="192" stroke="#d4232b" stroke-width="2.4"/>
+            <path d="M404 120 L 430 86 L 440 94 L 412 126 Z" fill="#0a0a0a"/><path d="M404 120 L 400 132 L 412 126 Z" fill="#d9b48f"/>
+            <text x="396" y="104" font-size="11" text-anchor="end" fill="#6a6a6a">Mark the tip of</text><text x="396" y="118" font-size="11" text-anchor="end" fill="#6a6a6a">your longest toe</text>
+            <line x1="58" x2="396" y1="232" y2="232" stroke="#0a0a0a" stroke-width="1.6" marker-start="url(#ht-arrow)" marker-end="url(#ht-arrow)"/>
+            <line x1="58" x2="58" y1="222" y2="242" stroke="#0a0a0a"/><line x1="396" x2="396" y1="222" y2="242" stroke="#0a0a0a"/>
+            <rect x="170" y="222" width="114" height="20" rx="10" fill="#0a0a0a"/>
+            <text x="227" y="236" font-size="11" font-weight="700" text-anchor="middle" fill="#ffffff">Foot length (cm)</text>
+          </svg>
+          <ol class="howto-steps">
+            <li>Put a sheet of paper on a hard floor against a wall.</li>
+            <li>Stand on it with your heel touching the wall, weight on that foot.</li>
+            <li>Mark the tip of your longest toe, then measure from the wall to the mark.</li>
+          </ol>
+          <p>Do both feet and use the longer one. Leave it blank and we'll estimate from your height.</p>
+        </details>
       </div>
       <div class="result" aria-live="polite">
         <p class="eyebrow">Your size</p>
@@ -90,7 +116,7 @@ export function mountFitPanel(root, opts) {
     let colour, gloss;
     if (chosen && chosen.hex) { colour = parseInt(chosen.hex.replace("#", ""), 16); gloss = /patent|shiny/i.test(chosen.name || ""); }
     else { const img = await loadImg(product.cutout || product.images[0]); colour = img ? sampleUpperColour(img) : 0x222222; gloss = /shiny|patent/i.test(product.description || "") || product.slug === "odin"; }
-    viewer.update({ heightCm: +inp.h.value, weightKg: +inp.w.value, fit, style: styleFor(product), colour, gloss });
+    viewer.update({ heightCm: +inp.h.value, weightKg: +inp.w.value, fit, style: styleFor(product), colour, gloss, slug: product.slug, colourName: chosen?.name || product.colourways?.[0]?.name });
   }
 
   // ---------- numbers ----------

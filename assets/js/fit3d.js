@@ -386,7 +386,7 @@ async function createFit3DUnsafe(container) {
   let buildCount = 0;
   // geometry is built in a worker (fit3d-geom.js), then dressed here
   let worker = null, seq = 0, inFlight = false, queued = null;
-  try { worker = new Worker(new URL("./fit3d-worker.js?v=9", import.meta.url), { type: "module" }); } catch { worker = null; }
+  try { worker = new Worker(new URL("./fit3d-worker.js?v=10", import.meta.url), { type: "module" }); } catch { worker = null; }
   let geomLocal = null;
   async function buildGeometry(opts) {
     if (worker) {
@@ -399,12 +399,57 @@ async function createFit3DUnsafe(container) {
       if (r) return r;
       worker = null;                                              // worker failed: build on this thread from now on
     }
-    geomLocal ||= await import("./fit3d-geom.js?v=9");
+    geomLocal ||= await import("./fit3d-geom.js?v=10");
     return geomLocal.buildFigure(opts);
   }
 
+  // ---------- the real product: 3D scans of our shoes ----------
+  // assets/models/shoes/manifest.json maps a product slug to its scanned model, e.g.
+  //   { "series-005": { "file": "/assets/models/shoes/series-005.glb", "toe": "+z", "side": "right",
+  //                     "colours": { "black": "/assets/models/shoes/series-005-black.glb" } } }
+  // A scan is scaled to the exact outside length of the customer's EU size, stood on the floor,
+  // and mirrored for the other foot. Styles without a scan use the generic modelled shoe.
+  let manifestP = null;
+  const scanCache = new Map();
+  const slugify = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  async function scannedShoe(slug, colourName) {
+    if (!slug) return null;
+    manifestP ||= fetch("/assets/models/shoes/manifest.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    const m = (await manifestP)[slug];
+    if (!m) return null;
+    const file = m.colours?.[slugify(colourName)] || m.file;
+    if (!scanCache.has(file)) {
+      scanCache.set(file, (async () => {
+        const { GLTFLoader } = await import(ADDONS + "loaders/GLTFLoader.js");
+        const gltf = await new GLTFLoader().loadAsync(file);
+        gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        return { scene: gltf.scene, toe: m.toe || "+z", side: m.side || "right" };
+      })().catch((e) => { console.info("Shoe scan failed to load:", file, e?.message || e); return null; }));
+    }
+    return scanCache.get(file);
+  }
+  function placeScan(scan, Lm, side) {
+    const inner = new THREE.Group(), wrap = new THREE.Group();
+    inner.add(scan.scene.clone(true));
+    inner.rotation.y = { "+z": 0, "-z": Math.PI, "+x": -Math.PI / 2, "-x": Math.PI / 2 }[scan.toe] ?? 0;
+    wrap.add(inner);
+    wrap.updateMatrixWorld(true);
+    let bb = new THREE.Box3().setFromObject(wrap, true);
+    if (bb.max.x - bb.min.x > bb.max.z - bb.min.z) {                            // length must run along z
+      inner.rotation.y += Math.PI / 2; wrap.updateMatrixWorld(true); bb = new THREE.Box3().setFromObject(wrap, true);
+      console.info("Shoe scan is sideways: set its \"toe\" to \"+x\" or \"-x\" in manifest.json");
+    }
+    inner.scale.setScalar(Lm / Math.max(1e-6, bb.max.z - bb.min.z));          // true length for this EU size
+    wrap.updateMatrixWorld(true);
+    bb = new THREE.Box3().setFromObject(wrap, true);
+    inner.position.set(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -bb.min.z);       // heel at z = 0, sole on the floor
+    if (scan.side !== side) wrap.scale.x = -1;
+    wrap.userData.scan = true;                                                   // shared geometry: don't dispose
+    return wrap;
+  }
+
   const sCache = new Map();
-  async function rebuild({ heightCm, weightKg, fit, style, colour, gloss }, draft = false) {
+  async function rebuild({ heightCm, weightKg, fit, style, colour, gloss, slug, colourName }, draft = false) {
     const st = STYLES[style] || STYLES.loafer;
     const key = `${heightCm}|${weightKg}|${fit.footCm}|${fit.breadthCm}`;
     const g = await buildGeometry({ heightCm, weightKg, fit, draft, sKnown: sCache.get(key) || null, st: { sole: st.sole, heel: st.heel, collar: st.collar, boot: !!st.boot } });
@@ -414,14 +459,15 @@ async function createFit3DUnsafe(container) {
     setMesh("tee", g.tee, teeMat);
     setMesh("pants", g.pants, pantsMat); meshes.pants.visible = !xray;
     // ---- shoes ----
-    shoes.forEach((o) => { figure.parent.remove(o); o.traverse((m) => { m.geometry?.dispose(); m.material?.dispose?.(); }); });
+    const scan = await scannedShoe(slug, colourName);
+    shoes.forEach((o) => { figure.parent.remove(o); if (!o.userData.scan) o.traverse((m) => { m.geometry?.dispose(); m.material?.dispose?.(); }); });
     shoes.length = 0;
     const Lm = fit.outerCm / 100, Bm = (fit.breadthCm + 1.0) / 100;
     for (const sx of [1, -1]) {
-      const o = buildShoe(THREE, st, Lm, Bm, colour, gloss);
+      const o = scan ? placeScan(scan, Lm, sx > 0 ? "left" : "right") : buildShoe(THREE, st, Lm, Bm, colour, gloss);
       o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
       o.position.set(0.052 * sx * H, 0, heelZ);
-      if (sx < 0) o.scale.x = -1;
+      if (sx < 0 && !scan) o.scale.x = -1;
       scene.add(o); shoes.push(o);
     }
     applyXray();

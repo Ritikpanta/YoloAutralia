@@ -82,3 +82,8 @@
 .fit3d-measure { position: absolute; left: 16px; right: 16px; top: 64px; display: grid; gap: 2px; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.86); backdrop-filter: blur(8px); font-size: 13px; color: #0a0a0a; pointer-events: none; }
 .fit3d-measure strong { font-size: 15px; font-weight: 800; }
 .fit3d-measure em { font-style: normal; font-size: 11px; color: #6a6a6a; }
+
+/* how-to-measure illustration */
+.howto-art { display: block; width: 100%; max-width: 520px; height: auto; margin: 12px 0 8px; }
+.howto-art text { font-family: var(--body); }
+.howto-steps { margin: 0 0 8px; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
