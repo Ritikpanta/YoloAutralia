@@ -387,6 +387,7 @@ function initProduct() {
   $('meta[name="description"]')?.setAttribute("content", `${p.name} by YOLO. ${aud(priceNow(p))}. ${p.description || CATEGORIES[p.category].blurb} Shipped across Australia.`);
 
   let colour = p.colourways.find((c) => c.slug === params.get("c")) || p.colourways[0] || null;
+  let fitPanel = null;
   let size = SIZES.includes(Number(params.get("s"))) ? Number(params.get("s")) : null, live = null; // live: from /api/stock
 
   root.innerHTML = `
@@ -413,7 +414,7 @@ function initProduct() {
       <p class="size-note" id="size-note"></p>
       <div class="enquire">
         <button class="btn btn-primary" id="add-btn" type="button">Add to cart</button>
-        <a class="btn" id="try-btn" href="/try-on?m=${encodeURIComponent(p.slug)}">Try it on</a>
+        <a class="btn" id="try-btn" href="#try-on">Try it on in 3D</a>
       </div>
       <p class="size-note" id="add-msg" role="status"></p>
       <ul class="pdp-points">
@@ -449,6 +450,7 @@ function initProduct() {
       if (size && stockFor(size) <= 0) size = null;
       const url = new URL(location.href); url.searchParams.set("c", colour.slug); history.replaceState(null, "", url);
       update();
+      fitPanel?.refresh();
     });
   }
   const sizeOpts = $("#size-opts");
@@ -486,7 +488,6 @@ function initProduct() {
     const addBtn = $("#add-btn");
     addBtn.disabled = !anyStock;
     addBtn.textContent = !anyStock ? "Sold out" : size ? `Add to cart — EU ${size}` : "Add to cart";
-    $("#try-btn").href = `/try-on?m=${encodeURIComponent(p.slug)}`;
   }
 
   $("#add-btn").addEventListener("click", () => {
@@ -499,6 +500,24 @@ function initProduct() {
   });
 
   update();
+
+  // Try it on in 3D, right on the product page
+  root.insertAdjacentHTML("afterend", `
+    <section class="fit-section wrap" id="try-on">
+      <div class="section-head"><div><p class="eyebrow">Try it on</p><h2>See ${esc(p.name)} on you</h2></div></div>
+      <div id="pdp-fit"></div>
+    </section>`);
+  import("/assets/js/tryon.js?v=6").then(({ mountFitPanel }) => {
+    fitPanel = mountFitPanel(document.getElementById("pdp-fit"), {
+      products: PRODUCTS, slug: p.slug,
+      getColour: () => (colour ? { hex: colour.hex, name: colour.name } : null),
+      onPickSize: (eu) => {
+        if (stockFor(eu) > 0) { size = eu; update(); $("#add-msg").textContent = `EU ${eu} selected. Add it to your cart when you're ready.`; }
+        else $("#add-msg").textContent = `EU ${eu} is sold out in this colour. Try another colour or message us about restocks.`;
+        document.getElementById("add-btn").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+      }
+    });
+  }).catch((e) => console.info("Fit panel unavailable", e));
   fetch(`/api/stock?slug=${encodeURIComponent(p.slug)}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
     if (d && d.live) { live = d; if (size && stockFor(size) <= 0) size = null; update(); }
   }).catch(() => {});

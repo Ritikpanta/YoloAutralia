@@ -4,7 +4,7 @@ A static storefront with three serverless functions, built for Vercel. It has no
 
 - **Pages:** `index.html`, `shop.html`, `product.html`, `contact.html`, `success.html`
 - **3D:** `assets/js/hero3d.js` (boots walking continuously on a moving floor) and `assets/js/shop3d.js` (turntable).
-- **Try on:** `try-on.html` + `assets/js/tryon.js`: size from height/weight/foot length, a figure scaled to the customer, a to-scale foot close-up, and a camera mode (needs HTTPS, which Vercel provides). Nothing is uploaded. Both use three.js 0.160 from jsDelivr. If WebGL isn't available, the pages fall back to CSS animations.
+- **Try on (every product page + /try-on):** `assets/js/tryon.js` (panel) + `assets/js/fit3d.js` (3D). A unisex 3D mannequin built from height (Drillis & Contini segment ratios) and weight (girths solved so model volume = weight ÷ 1010 kg/m³), wearing a parametric 3D shoe sized from foot length / EU size. Drag to rotate. Also a to-scale foot close-up and, on /try-on, a camera overlay. Nothing is uploaded. Both use three.js 0.160 from jsDelivr. If WebGL isn't available, the pages fall back to CSS animations.
 - **Cart:** stored in the shopper's browser. The checkout server re-prices everything, so prices can't be tampered with.
 - **API (`/api`):**
   - `checkout`: checks live stock in the Google Sheet, then opens a Stripe Checkout session.

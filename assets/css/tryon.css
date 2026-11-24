@@ -1,6 +1,6 @@
 /* Try-on page */
-.tryon { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 48px; align-items: start; padding-bottom: 110px; }
-.tryon-form { display: grid; gap: 22px; }
+.fit { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 48px; align-items: start; }
+.fit-form { display: grid; gap: 22px; }
 .field { display: grid; gap: 10px; font-weight: 700; font-size: 14px; color: var(--ink-2); }
 .field > span { display: flex; justify-content: space-between; }
 .field b { color: var(--ink); }
@@ -23,7 +23,7 @@
 .tryon-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .fineprint { font-size: 12px; color: var(--ink-3); margin: 0; }
 
-.tryon-view { position: sticky; top: 96px; }
+.fit-view { position: sticky; top: 96px; }
 .view-tabs { display: inline-flex; background: var(--bg-2); border-radius: 999px; padding: 4px; margin-bottom: 14px; }
 .view-tabs button { border: 0; background: none; padding: 10px 18px; border-radius: 999px; font-weight: 700; font-size: 14px; cursor: pointer; min-height: 40px; }
 .view-tabs button[aria-selected="true"] { background: var(--ink); color: #fff; }
@@ -32,8 +32,8 @@
 .view-stage text { font-family: var(--body); }
 
 @media (max-width: 900px) {
-  .tryon { grid-template-columns: 1fr; gap: 28px; }
-  .tryon-view { position: relative; top: 0; order: -1; }
+  .fit { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-bottom: 40px; }
+  .fit-view { position: relative; top: 0; order: -1; }
 }
 
 /* Camera mode */
@@ -52,3 +52,24 @@
 .cam-shot img { max-width: 100%; max-height: 75vh; border-radius: 16px; }
 .cam-shot-actions { display: flex; gap: 12px; margin-top: 16px; justify-content: center; }
 .cam-msg { position: absolute; top: 45%; left: 0; right: 0; text-align: center; padding: 0 24px; font-size: 16px; }
+
+/* 3D stage */
+.fit3d { position: relative; width: 100%; height: 100%; }
+.fit3d-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.fit3d-canvas:active { cursor: grabbing; }
+.fit3d-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 30px; color: var(--ink-2); font-size: 14px; margin: 0; }
+.fit3d-tools { position: absolute; top: 14px; right: 14px; display: flex; gap: 6px; z-index: 2; }
+.fit3d-tools button { min-height: 36px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.9); font-weight: 700; font-size: 13px; cursor: pointer; }
+.fit3d-tools button:hover { border-color: var(--ink); }
+.fit3d-hint { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; font-size: 12px; color: var(--ink-3); margin: 0; pointer-events: none; }
+.fit3d:not(.ready) .fit3d-tools, .fit3d:not(.ready) .fit3d-hint { display: none; }
+.view-stage { position: relative; }
+.view-stage > svg { position: absolute; inset: 0; }
+.maths summary { cursor: pointer; font-weight: 700; font-size: 14px; min-height: 36px; display: flex; align-items: center; text-decoration: underline; }
+.maths dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 8px 0 0; font-size: 13px; }
+.maths dt { font-weight: 700; color: var(--ink); }
+.maths dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) { .maths dl { grid-template-columns: 1fr; } .maths dd { margin-bottom: 6px; } }
+/* product page section */
+.fit-section { padding: 30px 0 110px; border-top: 1px solid var(--line); }
+.fit-section .section-head { margin-bottom: 30px; }
