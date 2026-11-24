@@ -82,62 +82,113 @@ function init() {
 
   async function draw() {
     const p = shoes.find((x) => x.slug === sel.value);
-    if (view === "figure") drawFigure(p, await loadImg(p.cutout));
+    if (view === "figure") drawFigure(p, await loadImg(p.cutout));   // pair shot: both shoes worn
     else drawFoot(p, await loadImg(p.cutoutSide || p.cutout));
   }
 
-  /* ---------- "On you": a minimal figure scaled to height and build ---------- */
+  /* ---------- "On you": a dressed mannequin, scaled to height and build, wearing the shoe ----------
+     The shoe photo is analysed once to find where each shoe's opening is, so the legs go *into*
+     the shoes and the trouser hems fall over the collars. */
+  const shoeFit = new Map();
+  function analyseShoe(img) {
+    if (shoeFit.has(img.src)) return shoeFit.get(img.src);
+    const W = 200, H = Math.max(1, Math.round(200 * img.height / img.width));
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(img, 0, 0, W, H);
+    const a = g.getImageData(0, 0, W, H).data;
+    const solid = (x, y) => a[(y * W + x) * 4 + 3] > 150;
+    let minX = W, maxX = 0, maxY = 0;
+    const top = new Array(W).fill(-1);
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (solid(x, y)) { if (top[x] < 0) top[x] = y; minX = Math.min(minX, x); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+    const mid = Math.round((minX + maxX) / 2);
+    const collar = (x0, x1) => {               // the high part of each shoe = its opening / collar
+      let tMin = H; for (let x = x0; x < x1; x++) if (top[x] >= 0) tMin = Math.min(tMin, top[x]);
+      let sx = 0, n = 0; const lim = tMin + H * 0.09;
+      for (let x = x0; x < x1; x++) if (top[x] >= 0 && top[x] <= lim) { sx += x; n++; }
+      const cx = n ? sx / n : (x0 + x1) / 2;
+      return { x: cx / W, y: (tMin + H * 0.035) / H, w: Math.max(0.06, (n / W) * 0.9) };
+    };
+    const fit = { left: collar(minX, mid), right: collar(mid, maxX + 1), floor: maxY / H, spanX: (maxX - minX) / W };
+    shoeFit.set(img.src, fit);
+    return fit;
+  }
+
   function drawFigure(p, img) {
     const svg = $("#t-figure");
-    const FLOOR = 650, PX = 560 / 210;                 // 210 cm fills the frame
-    const H = shown.h * PX, top = FLOOR - H, u = H / 7.6;
-    const wf = Math.pow(clamp(shown.bmi / 22, 0.7, 1.9), 0.65);   // build factor
-    const cx = 340;
-    const shoeLenPx = shown.len * PX;                  // shoe length at this scale
-    const ankleY = FLOOR - 0.32 * u;
-    const hipY = top + 3.85 * u, shY = top + 1.35 * u, waistY = top + 2.95 * u;
-    const shW = 1.0 * u * Math.pow(wf, 0.6), waistW = 0.62 * u * wf, hipW = 0.78 * u * wf;
-    const thigh = 0.27 * u * wf, ankle = 0.12 * u * Math.pow(wf, 0.4), legGap = 0.07 * u + 0.05 * u * wf;
-    const lx = cx - legGap - thigh, rx = cx + legGap + thigh;    // leg centres at hip
-    const footX = (s) => cx + s * (0.3 * u + 0.06 * u * wf);   // ankle centres
-    const leg = (s) => {
-      const hx = s < 0 ? lx : rx, fx = footX(s);
-      return `M${hx - thigh} ${hipY} C ${hx - thigh} ${hipY + 1.2 * u}, ${fx - ankle * 1.6} ${ankleY - 1.6 * u}, ${fx - ankle} ${ankleY} L ${fx + ankle} ${ankleY} C ${fx + ankle * 1.8} ${ankleY - 1.6 * u}, ${hx + thigh} ${hipY + 1.2 * u}, ${hx + thigh} ${hipY} Z`;
-    };
-    const arm = (s) => {
-      const x0 = cx + s * shW, x1 = cx + s * (hipW + 0.32 * u), y1 = top + 4.05 * u, w = 0.17 * u * Math.pow(wf, 0.8);
-      return `M${x0 - w} ${shY + 0.1 * u} Q ${x0 + s * 0.15 * u} ${shY + 1.6 * u} ${x1 - w * 0.6} ${y1} L ${x1 + w * 0.6} ${y1} Q ${x0 + s * 0.35 * u} ${shY + 1.5 * u} ${x0 + w} ${shY + 0.1 * u} Z`;
-    };
-    const torso = `M${cx - shW} ${shY} Q ${cx - shW - 0.05 * u} ${shY + 0.9 * u} ${cx - waistW} ${waistY} Q ${cx - hipW - 0.05 * u} ${hipY - 0.3 * u} ${cx - hipW} ${hipY + 0.25 * u} L ${cx + hipW} ${hipY + 0.25 * u} Q ${cx + hipW + 0.05 * u} ${hipY - 0.3 * u} ${cx + waistW} ${waistY} Q ${cx + shW + 0.05 * u} ${shY + 0.9 * u} ${cx + shW} ${shY} Q ${cx} ${shY - 0.25 * u} ${cx - shW} ${shY} Z`;
+    const FLOOR = 655, PX = 560 / 210;                 // 210 cm fills the frame
+    const Hh = shown.h * PX, top = FLOOR - Hh, u = Hh / 7.7;   // u = head height
+    const wf = Math.pow(clamp(shown.bmi / 22, 0.75, 1.9), 0.62);  // build factor
+    const cx = 330;
+    const fit = img ? analyseShoe(img) : { left: { x: 0.38, y: 0.4, w: 0.12 }, right: { x: 0.62, y: 0.4, w: 0.12 }, floor: 0.95, spanX: 0.9 };
 
-    // ruler
+    // place the pair photo so its shoes are the recommended length and its openings straddle the body centre
+    const imgW = shown.len * PX * 1.9, imgH = img ? imgW * img.height / img.width : imgW * 0.6;
+    const imgX = cx - ((fit.left.x + fit.right.x) / 2) * imgW, imgY = FLOOR - fit.floor * imgH;
+    const ankL = { x: imgX + fit.left.x * imgW, y: imgY + fit.left.y * imgH, w: fit.left.w * imgW };
+    const ankR = { x: imgX + fit.right.x * imgW, y: imgY + fit.right.y * imgH, w: fit.right.w * imgW };
+
+    // body landmarks
+    const neckY = top + 1.05 * u, shY = top + 1.42 * u, chestY = top + 2.2 * u, waistY = top + 3.05 * u, hipY = top + 3.55 * u, crotchY = top + 3.95 * u;
+    const shW = 0.98 * u * Math.pow(wf, 0.55), chestW = 0.8 * u * wf, waistW = 0.66 * u * wf, hipW = 0.8 * u * wf;
+    const thigh = 0.36 * u * wf;
+    // trouser legs: hip -> knee -> hem (hem sits over the shoe collar)
+    const leg = (side, ank) => {
+      const hx = cx + side * (hipW - thigh);
+      const hemW = Math.max(ank.w * 0.85, 0.22 * u * Math.pow(wf, 0.5));
+      const kneeY = (crotchY + ank.y) / 2 + 0.2 * u, kneeX = (hx + ank.x) / 2, kneeW = (thigh + hemW) / 2;
+      const outer = side < 0 ? -1 : 1;
+      return `M ${hx + outer * thigh} ${hipY - 0.1 * u}
+        C ${hx + outer * thigh * 1.05} ${crotchY + 0.6 * u}, ${kneeX + outer * kneeW} ${kneeY - 0.6 * u}, ${kneeX + outer * kneeW} ${kneeY}
+        C ${kneeX + outer * kneeW} ${kneeY + 0.8 * u}, ${ank.x + outer * hemW * 1.05} ${ank.y - 0.9 * u}, ${ank.x + outer * hemW} ${ank.y + 0.16 * u}
+        L ${ank.x - outer * hemW} ${ank.y + 0.2 * u}
+        C ${ank.x - outer * hemW * 1.02} ${ank.y - 0.9 * u}, ${kneeX - outer * kneeW * 0.85} ${kneeY + 0.6 * u}, ${kneeX - outer * kneeW * 0.85} ${kneeY}
+        C ${kneeX - outer * kneeW * 0.85} ${kneeY - 0.5 * u}, ${cx + outer * 0.03 * u} ${crotchY + 0.3 * u}, ${cx} ${crotchY}
+        L ${cx} ${hipY - 0.1 * u} Z`;
+    };
+    const arm = (side) => {
+      const sx = cx + side * shW, hx = cx + side * (hipW + 0.22 * u), hy = top + 3.95 * u, w = 0.19 * u * Math.pow(wf, 0.75);
+      return `M ${sx - side * 0.05 * u} ${shY - 0.05 * u} C ${sx + side * 0.25 * u} ${shY + 0.1 * u}, ${hx + side * w} ${chestY}, ${hx + side * w * 0.7} ${hy}
+        Q ${hx} ${hy + 0.35 * u} ${hx - side * w * 0.7} ${hy}
+        C ${hx - side * w * 0.9} ${chestY + 0.2 * u}, ${sx - side * 0.15 * u} ${shY + 0.5 * u}, ${sx - side * 0.3 * u} ${shY + 0.3 * u} Z`;
+    };
+    const tee = `M ${cx - 0.18 * u} ${neckY} Q ${cx} ${neckY + 0.18 * u} ${cx + 0.18 * u} ${neckY}
+      C ${cx + shW * 0.6} ${neckY + 0.05 * u}, ${cx + shW} ${shY - 0.12 * u}, ${cx + shW + 0.12 * u} ${shY + 0.25 * u}
+      L ${cx + shW + 0.28 * u} ${shY + 0.95 * u} L ${cx + chestW + 0.02 * u} ${shY + 1.0 * u}
+      C ${cx + chestW} ${chestY + 0.4 * u}, ${cx + waistW} ${waistY - 0.2 * u}, ${cx + hipW * 0.98} ${hipY}
+      L ${cx - hipW * 0.98} ${hipY}
+      C ${cx - waistW} ${waistY - 0.2 * u}, ${cx - chestW} ${chestY + 0.4 * u}, ${cx - chestW - 0.02 * u} ${shY + 1.0 * u}
+      L ${cx - shW - 0.28 * u} ${shY + 0.95 * u} L ${cx - shW - 0.12 * u} ${shY + 0.25 * u}
+      C ${cx - shW} ${shY - 0.12 * u}, ${cx - shW * 0.6} ${neckY + 0.05 * u}, ${cx - 0.18 * u} ${neckY} Z`;
+
     let ruler = "";
     for (let cm = 140; cm <= 210; cm += 10) {
       const y = FLOOR - cm * PX;
-      ruler += `<line x1="60" x2="${cm % 20 ? 72 : 80}" y1="${y}" y2="${y}" stroke="#0a0a0a" stroke-opacity=".35"/><text x="86" y="${y + 4}" font-size="11" fill="#8a8a8a">${cm}</text>`;
+      ruler += `<line x1="60" x2="${cm % 20 ? 70 : 78}" y1="${y}" y2="${y}" stroke="#0a0a0a" stroke-opacity=".3"/><text x="84" y="${y + 4}" font-size="11" fill="#8a8a8a">${cm}</text>`;
     }
-    // pair photo at the feet, scaled to the recommended shoe length (pair shot ≈ 1.9 shoe lengths wide)
-    let shoes3 = "";
-    if (img) {
-      const w = shoeLenPx * 1.9, h = w * (img.height / img.width);
-      shoes3 = `<image href="${esc(p.cutout)}" x="${cx - w / 2}" y="${FLOOR - h * 0.86}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid meet"/>`;
-    }
+    const shoeImg = img ? `<image href="${esc(img.src)}" x="${imgX}" y="${imgY}" width="${imgW}" height="${imgH}"/>` : "";
     svg.innerHTML = `
-      <defs><radialGradient id="fs" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#000" stop-opacity=".18"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs>
-      <line x1="60" x2="60" y1="${FLOOR - 210 * PX}" y2="${FLOOR}" stroke="#0a0a0a" stroke-opacity=".2"/>${ruler}
-      <line x1="40" x2="560" y1="${FLOOR}" y2="${FLOOR}" stroke="#0a0a0a" stroke-opacity=".15"/>
-      <ellipse cx="${cx}" cy="${FLOOR}" rx="${hipW * 1.9}" ry="14" fill="url(#fs)"/>
-      <line x1="150" x2="${cx - 0.45 * u - 10}" y1="${top}" y2="${top}" stroke="#0a0a0a" stroke-dasharray="3 5" stroke-opacity=".5"/>
-      <text x="150" y="${top - 8}" font-size="13" font-weight="700" fill="#0a0a0a">${Math.round(shown.h)} cm</text>
-      <g fill="#dedede">
-        <path d="${arm(-1)}"/><path d="${arm(1)}"/>
-        <path d="${leg(-1)}" fill="#d2d2d2"/><path d="${leg(1)}"/>
-        <path d="${torso}"/>
-        <rect x="${cx - 0.17 * u}" y="${top + 0.9 * u}" width="${0.34 * u}" height="${0.55 * u}" rx="${0.1 * u}"/>
-        <ellipse cx="${cx}" cy="${top + 0.5 * u}" rx="${0.36 * u}" ry="${0.5 * u}"/>
+      <defs>
+        <radialGradient id="fs" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#000" stop-opacity=".2"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+        <linearGradient id="skin" x1="0" x2="1"><stop offset="0" stop-color="#cfcfcf"/><stop offset=".5" stop-color="#e2e2e2"/><stop offset="1" stop-color="#cbcbcb"/></linearGradient>
+        <linearGradient id="pants" x1="0" x2="1"><stop offset="0" stop-color="#0c0c0c"/><stop offset=".5" stop-color="#262626"/><stop offset="1" stop-color="#0c0c0c"/></linearGradient>
+        <linearGradient id="teeG" x1="0" x2="1"><stop offset="0" stop-color="#efefef"/><stop offset=".5" stop-color="#ffffff"/><stop offset="1" stop-color="#ececec"/></linearGradient>
+      </defs>
+      <line x1="60" x2="60" y1="${FLOOR - 210 * PX}" y2="${FLOOR}" stroke="#0a0a0a" stroke-opacity=".15"/>${ruler}
+      <line x1="40" x2="560" y1="${FLOOR}" y2="${FLOOR}" stroke="#0a0a0a" stroke-opacity=".12"/>
+      <ellipse cx="${cx}" cy="${FLOOR + 2}" rx="${imgW * 0.55}" ry="12" fill="url(#fs)"/>
+      <line x1="140" x2="${cx - 0.5 * u}" y1="${top}" y2="${top}" stroke="#0a0a0a" stroke-dasharray="3 5" stroke-opacity=".45"/>
+      <text x="140" y="${top - 8}" font-size="13" font-weight="700" fill="#0a0a0a">${Math.round(shown.h)} cm</text>
+      <g>
+        <path d="${arm(-1)}" fill="url(#skin)"/><path d="${arm(1)}" fill="url(#skin)"/>
+        <rect x="${cx - 0.15 * u}" y="${top + 0.85 * u}" width="${0.3 * u}" height="${0.35 * u}" fill="#d6d6d6"/>
+        <ellipse cx="${cx}" cy="${top + 0.5 * u}" rx="${0.37 * u}" ry="${0.5 * u}" fill="url(#skin)"/>
+        ${shoeImg}
+        <path d="${leg(-1, ankL)}" fill="url(#pants)"/>
+        <path d="${leg(1, ankR)}" fill="url(#pants)"/>
+        <path d="${tee}" fill="url(#teeG)" stroke="#0a0a0a" stroke-opacity=".08"/>
+        <path d="M ${cx - hipW * 0.98} ${hipY} L ${cx + hipW * 0.98} ${hipY} L ${cx + hipW * 0.98} ${hipY + 0.12 * u} L ${cx - hipW * 0.98} ${hipY + 0.12 * u} Z" fill="#111"/>
       </g>
-      ${shoes3}
-      <text x="560" y="${FLOOR + 36}" font-size="12" fill="#8a8a8a" text-anchor="end">${esc(p.name)} · EU ${target.eu}</text>`;
+      <text x="560" y="${FLOOR + 34}" font-size="12" fill="#8a8a8a" text-anchor="end">${esc(p.name)} · EU ${target.eu}</text>`;
   }
 
   /* ---------- "Foot close-up": your foot vs the shoe, side on, to scale ---------- */
