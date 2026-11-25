@@ -92,6 +92,7 @@ export function mountWalker(root, { products = [] } = {}) {
       renderer.toneMappingExposure = THREE.NeutralToneMapping ? 0.95 : 1.15;
       renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.localClippingEnabled = true;
       canvasBox.prepend(renderer.domElement);
+      shopLink(renderer.domElement);
       scene = new THREE.Scene();
       const bg = new THREE.Color("#e4e4e6"); scene.background = bg; scene.fog = new THREE.Fog(bg, 7, 16);   // seamless sweep
       const pm = new THREE.PMREMGenerator(renderer);
@@ -206,14 +207,60 @@ export function mountWalker(root, { products = [] } = {}) {
     rec.stripe.push(u); m.needsUpdate = true;
   }
 
+  // Hover (or tap) the hoodie: a "Shop this hoodie" tag with an arrow follows the pointer; a click on the
+  // hoodie, or on the tag, opens the hoodie's shop in a new tab. Dragging still orbits the camera.
+  const SHOP_URL = "https://chitrakathaproduction.com/shop/";
+  function shopLink(cv) {
+    const tag = el("a", { class: "walker-shop", href: SHOP_URL, target: "_blank", rel: "noopener", text: "Shop this hoodie" });
+    tag.append(el("span", { class: "walker-shop-arrow", text: "\u2192" })); tag.hidden = true;
+    canvasBox.append(tag);
+    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+    let over = false, pending = null, down = null, hideT = 0;
+    const shown = (o) => { for (let x = o; x; x = x.parent) if (!x.visible) return false; return true; };
+    function hit(e) {
+      const meshes = (cur?.hoodie || []).filter(shown);
+      if (!meshes.length) return false;
+      const r = cv.getBoundingClientRect();
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      const first = ray.intersectObject(cur.root, true).find((h) => shown(h.object));   // nearest visible surface, so an arm in front blocks it
+      return !!first && meshes.includes(first.object);
+    }
+    function place(e, on) {
+      const r = canvasBox.getBoundingClientRect();
+      over = on; cv.style.cursor = on ? "pointer" : "";
+      if (on) {
+        clearTimeout(hideT); tag.hidden = false;
+        const x = Math.min(e.clientX - r.left + 14, r.width - tag.offsetWidth - 8), y = Math.max(e.clientY - r.top - tag.offsetHeight - 10, 8);
+        tag.style.transform = `translate(${x}px, ${y}px)`;
+      } else if (e.pointerType !== "touch") tag.hidden = true;
+    }
+    cv.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch" || e.buttons) return;
+      if (pending) return;
+      pending = requestAnimationFrame(() => { pending = null; place(e, hit(e)); });
+    });
+    cv.addEventListener("pointerleave", (e) => { if (e.pointerType !== "touch") { over = false; tag.hidden = true; cv.style.cursor = ""; } });
+    cv.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, t: e.timeStamp }; });
+    cv.addEventListener("pointerup", (e) => {
+      const tap = down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && e.timeStamp - down.t < 700; down = null;
+      if (!tap) return;
+      const on = hit(e);
+      if (e.pointerType === "touch") {                              // phones: first tap shows the tag, tapping the tag opens the shop
+        place(e, on); clearTimeout(hideT); if (on) hideT = setTimeout(() => { tag.hidden = true; }, 4000); else tag.hidden = true;
+      } else if (on) window.open(SHOP_URL, "_blank", "noopener");
+    });
+  }
+
   async function loadBody(b) {
     if (bodies[b]) return bodies[b];
     const gltf = await (await loader()).loadAsync(BASE + `walker-${b}.glb`);
     const rootObj = new THREE.Group(); rootObj.add(gltf.scene);
-    const rec = { root: rootObj, mixer: new THREE.AnimationMixer(gltf.scene), accent: [], skin: [], stripe: [], parts: [], bones: {}, rest: {} };
+    const rec = { root: rootObj, mixer: new THREE.AnimationMixer(gltf.scene), accent: [], skin: [], stripe: [], parts: [], bones: {}, rest: {}, hoodie: [] };
     gltf.scene.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+        if (/hoodie/i.test(o.name + " " + (o.parent?.name || "")) || [].concat(o.material).some((m) => /hoodie/i.test(m.name))) rec.hoodie.push(o);   // body + rib cuffs + print
         for (const m of [].concat(o.material)) {
           if (/accent/i.test(m.name)) rec.accent.push(m);
           if (m.map) m.map.anisotropy = 8;

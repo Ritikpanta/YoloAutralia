@@ -97,3 +97,11 @@
   .walker-cam { left: 10px; right: 10px; bottom: 10px; flex-wrap: nowrap; overflow-x: auto; gap: 6px; scrollbar-width: none; }
   .walker-cam .chip { min-height: 34px; padding: 5px 12px; font-size: 12px; flex: none; border-width: 1.5px; }
 }
+
+/* "Shop this hoodie" hover tag on the 3D model */
+.walker-shop { position: absolute; left: 0; top: 0; z-index: 3; display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px; background: #111; color: #fff; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.18); transition: transform .08s linear; }
+.walker-shop[hidden] { display: none; }
+.walker-shop-arrow { display: inline-block; transition: transform .2s ease; }
+.walker-shop:hover .walker-shop-arrow { transform: translateX(3px); }
+@media (prefers-reduced-motion: no-preference) { .walker-shop-arrow { animation: walker-nudge 1.2s ease-in-out infinite; } }
+@keyframes walker-nudge { 50% { transform: translateX(4px); } }
