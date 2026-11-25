@@ -1,1 +1,28 @@
-{}
+{
+  "_doc": "3D shoes for the try-on model. 'products' is keyed by product slug (lib/catalog.js) and may map colourway slugs to their own files. Only add a product here when a real 3D scan/model of THAT product exists. 'studio' holds the generic placeholder shoes, which are not YOLO products and are labelled as such on the site. Every model: a RIGHT shoe, toe towards +z, heel at z = 0, sole at y = 0, real-world metres. length_mm = outside length of the model as built, size_eu = the size it represents. sole_mm = height of the insole under the heel (how far the shoe lifts the wearer). collar_mm = lowest height of the collar/topline above the sole bottom (anything of the foot below it is hidden).",
+  "products": {},
+  "studio": {
+    "sneaker": {
+      "file": "/assets/models/shoes/studio-sneaker.glb",
+      "label": "Plain white sneaker",
+      "size_eu": 42,
+      "length_mm": 288,
+      "toe": "+z",
+      "side": "right",
+      "outfit": "casual",
+      "sole_mm": 28,
+      "collar_mm": 62
+    },
+    "derby": {
+      "file": "/assets/models/shoes/studio-derby.glb",
+      "label": "Plain black derby",
+      "size_eu": 42,
+      "length_mm": 296,
+      "toe": "+z",
+      "side": "right",
+      "outfit": "formal",
+      "sole_mm": 34,
+      "collar_mm": 70
+    }
+  }
+}

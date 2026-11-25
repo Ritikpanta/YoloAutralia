@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&family=Poppins:wght@300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/css/styles.css?v=12">
-  <link rel="stylesheet" href="/assets/css/tryon.css?v=13">
+  <link rel="stylesheet" href="/assets/css/tryon.css?v=14">
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
 </head>
 <body data-page="try-on">
@@ -29,7 +29,7 @@
       <div class="wrap">
         <h2 id="walker-title" class="sr-only">See the look on a 3D model</h2>
         <p class="eyebrow">The look</p>
-        <p class="lede" style="margin:0 0 22px">Switch between the women's and men's model, try the casual or the formal outfit, set the height and weight, and drag to look from any side.</p>
+        <p class="lede" style="margin:0 0 22px">Switch between the women's and men's model, try the casual or the formal outfit, set the height, weight and shoe size, watch the model walk, and drag to look from any side.</p>
         <div id="walker-root"></div>
       </div>
     </section>
@@ -69,7 +69,7 @@
   <script type="module" src="/assets/js/app.js?v=12"></script>
   <script type="module" src="/assets/js/tryon.js?v=12"></script>
   <script type="module">
-    import { mountWalker } from "/assets/js/walker3d.js?v=13";
+    import { mountWalker } from "/assets/js/walker3d.js?v=14";
     await (window.YOLO_CATALOG_READY || null);
     mountWalker(document.getElementById("walker-root"), { products: window.YOLO_PRODUCTS || [] });
   </script>
