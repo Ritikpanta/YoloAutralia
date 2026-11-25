@@ -314,6 +314,54 @@ export function mountWalker(root, { products = [] } = {}) {
     cur.girth.push([b, f]);
     for (const cn of [].concat(child || [])) { const c = B(cn); if (c) cur.girth.push([c, 1 / f]); }
   }
+  // Standing stance: the idle clip was baked with the feet wide apart, which reads as splayed legs. While
+  // standing, swing each leg in at the hip so the ankles sit just under the hips with a small gap, and turn
+  // the foot back so the sole stays flat. Blended by the idle weight, so walking is untouched.
+  const STANCE = 0.62;                                             // ankle spacing as a share of hip-joint spacing
+  const _v = {}; const V = (k) => (_v[k] ||= new THREE.Vector3());
+  let _q, _qp, _qi;
+  const touched = new Map();                                      // bone -> its clip pose before our tweaks
+  function restorePose() { for (const [b, q] of touched) b.quaternion.copy(q); touched.clear(); }
+  function worldRotate(b, qW) {                                    // apply a world-space rotation to a bone's local pose
+    if (!touched.has(b)) touched.set(b, b.quaternion.clone());      // the mixer skips unchanged tracks, so undo next frame
+    b.parent.getWorldQuaternion(_qp); _qi.copy(_qp).invert();
+    b.quaternion.premultiply(_qi.multiply(qW).multiply(_qp)).normalize(); b.updateMatrixWorld(true);
+  }
+  function applyStance() {
+    const w = cur?.idle ? cur.idle.getEffectiveWeight() : 0;
+    if (w < 0.001) return;
+    if (!_q) { _q = new THREE.Quaternion(); _qp = new THREE.Quaternion(); _qi = new THREE.Quaternion(); }
+    const hl = B("upperleg01.L"), hr = B("upperleg01.R"); if (!hl || !hr) return;
+    cur.root.updateMatrixWorld(true);
+    const HL = hl.getWorldPosition(V("hl")), HR = hr.getWorldPosition(V("hr"));
+    const lat = V("lat").subVectors(HL, HR); const half = lat.length() / 2; lat.normalize();
+    const mid = V("mid").addVectors(HL, HR).multiplyScalar(0.5);
+    for (const [sd, H, sgn] of [["L", HL, 1], ["R", HR, -1]]) {
+      const ft = B(`foot.${sd}`); if (!ft) continue;
+      const F = ft.getWorldPosition(V("f"));
+      const off = V("off").subVectors(F, mid).dot(lat);              // current lateral position of the ankle
+      const want = sgn * half * STANCE;
+      if (sgn * off <= sgn * want) continue;                          // already close enough
+      const a = V("a").subVectors(F, H), b = V("b").copy(a).addScaledVector(lat, (want - off) * w);
+      _q.setFromUnitVectors(a.normalize(), b.normalize());
+      worldRotate(B(`upperleg01.${sd}`), _q);
+      worldRotate(ft, _q.invert());                                   // keep the sole flat on the floor
+    }
+  }
+  // Relaxed shoulders: the clips hold the clavicles a little raised, which squares the hoodie's shoulders off
+  // like pads. Drop each shoulder tip a few degrees (arms keep hanging straight down).
+  const SHOULDER_DROP = 0.13;                                      // radians
+  function applyShoulders() {
+    if (!cur) return;
+    if (!_q) { _q = new THREE.Quaternion(); _qp = new THREE.Quaternion(); _qi = new THREE.Quaternion(); }
+    const up = V("up").set(0, 1, 0);
+    for (const sd of ["L", "R"]) {
+      const c = B(`clavicle.${sd}`), arm = B(`upperarm01.${sd}`); if (!c || !arm) continue;
+      const P = c.getWorldPosition(V("cp")), T = arm.getWorldPosition(V("ct"));
+      const d = V("cd").subVectors(T, P); const axis = V("ax").crossVectors(d, up).normalize();   // tip moves down
+      _q.setFromAxisAngle(axis, -SHOULDER_DROP); worldRotate(c, _q); worldRotate(arm, _q.invert());
+    }
+  }
   function applyGirth() { if (cur?.girth) for (const [b, f] of cur.girth) b.scale.set(f, 1, f); }
   function applyShape() {
     if (!cur) return;
@@ -415,7 +463,7 @@ export function mountWalker(root, { products = [] } = {}) {
     // measure the feet in the idle pose's first frame (both feet flat)
     const t0 = cur.idle ? cur.idle.time : 0, w0 = cur.walk ? cur.walk.getEffectiveWeight() : 0, i0 = cur.idle ? cur.idle.getEffectiveWeight() : 1;
     if (cur.walk) cur.walk.setEffectiveWeight(0); if (cur.idle) { cur.idle.setEffectiveWeight(1); cur.idle.time = 0; }
-    cur.mixer.update(0); applyGirth();
+    restorePose(); cur.mixer.update(0); applyStance(); applyShoulders(); applyGirth();
     cur.root.position.y = 0; cur.root.updateMatrixWorld(true);
     for (const h of shoeObjs) {
       const sd = h.userData.side, fb = B(`foot.${sd}`), toe = B(`toe1-1.${sd}`) || B(`toes.${sd}`);
@@ -486,7 +534,7 @@ export function mountWalker(root, { products = [] } = {}) {
     if (!visible) return;
     const dt = Math.min(clock.getDelta(), 0.05);
     if (cur) {
-      cur.mixer.update(dt); applyGirth();
+      restorePose(); cur.mixer.update(dt); applyStance(); applyShoulders(); applyGirth();
       if (cur.walk) floorTex.offset.y -= (cur.meta.walk?.speed || 0.8) * cur.root.scale.y * cur.walk.getEffectiveWeight() * dt;
     }
     if (floatObj) floatObj.rotation.y += dt * 0.35;
