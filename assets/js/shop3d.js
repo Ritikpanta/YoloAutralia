@@ -2,7 +2,7 @@
    Drag or swipe to spin, hover to lift a shoe, click the front shoe to open it
    (click any other shoe to bring it to the front). Arrow keys work too.
    Falls back to the CSS carousel in app.js if three.js or WebGL isn't available. */
-const THREE_URL = "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+const THREE_URL = "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
 const host = document.getElementById("shop3d");
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);

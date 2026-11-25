@@ -24,12 +24,8 @@
 .fineprint { font-size: 12px; color: var(--ink-3); margin: 0; }
 
 .fit-view { position: sticky; top: 96px; }
-.view-tabs { display: inline-flex; background: var(--bg-2); border-radius: 999px; padding: 4px; margin-bottom: 14px; }
-.view-tabs button { border: 0; background: none; padding: 10px 18px; border-radius: 999px; font-weight: 700; font-size: 14px; cursor: pointer; min-height: 40px; }
-.view-tabs button[aria-selected="true"] { background: var(--ink); color: #fff; }
-.view-stage { border-radius: 24px; background: var(--bg-2); aspect-ratio: 6 / 7; overflow: hidden; }
-.view-stage svg { width: 100%; height: 100%; display: block; }
-.view-stage text { font-family: var(--body); }
+.foot-svg { display: block; width: 100%; height: auto; aspect-ratio: 6 / 7; border-radius: 24px; background: var(--bg-2); }
+.foot-svg text { font-family: var(--body); }
 
 @media (max-width: 900px) {
   .fit { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-bottom: 40px; }
@@ -53,18 +49,6 @@
 .cam-shot-actions { display: flex; gap: 12px; margin-top: 16px; justify-content: center; }
 .cam-msg { position: absolute; top: 45%; left: 0; right: 0; text-align: center; padding: 0 24px; font-size: 16px; }
 
-/* 3D stage */
-.fit3d { position: relative; width: 100%; height: 100%; }
-.fit3d-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
-.fit3d-canvas:active { cursor: grabbing; }
-.fit3d-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 30px; color: var(--ink-2); font-size: 14px; margin: 0; }
-.fit3d-tools { position: absolute; top: 14px; right: 14px; display: flex; gap: 6px; z-index: 2; }
-.fit3d-tools button { min-height: 36px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.9); font-weight: 700; font-size: 13px; cursor: pointer; }
-.fit3d-tools button:hover { border-color: var(--ink); }
-.fit3d-hint { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; font-size: 12px; color: var(--ink-3); margin: 0; pointer-events: none; }
-.fit3d:not(.ready) .fit3d-tools, .fit3d:not(.ready) .fit3d-hint { display: none; }
-.view-stage { position: relative; }
-.view-stage > svg { position: absolute; inset: 0; }
 .maths summary { cursor: pointer; font-weight: 700; font-size: 14px; min-height: 36px; display: flex; align-items: center; text-decoration: underline; }
 .maths dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 8px 0 0; font-size: 13px; }
 .maths dt { font-weight: 700; color: var(--ink); }
@@ -74,46 +58,42 @@
 .fit-section { padding: 30px 0 110px; border-top: 1px solid var(--line); }
 .fit-section .section-head { margin-bottom: 30px; }
 
-/* studio backdrop like a fashion render */
-.fit3d { background: radial-gradient(ellipse at 50% 35%, #f1f1f1 0%, #d4d4d4 55%, #a9a9a9 100%); border-radius: 24px; }
-.fit3d .fit3d-hint { color: #555; }
-
-/* measurements shown over the 3D feet close-up */
-.fit3d-measure { position: absolute; left: 16px; right: 16px; top: 64px; display: grid; gap: 2px; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.86); backdrop-filter: blur(8px); font-size: 13px; color: #0a0a0a; pointer-events: none; }
-.fit3d-measure strong { font-size: 15px; font-weight: 800; }
-.fit3d-measure em { font-style: normal; font-size: 11px; color: #6a6a6a; }
-
 /* how-to-measure illustration */
 .howto-art { display: block; width: 100%; max-width: 520px; height: auto; margin: 12px 0 8px; }
 .howto-art text { font-family: var(--body); }
 .howto-steps { margin: 0 0 8px; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
 
-/* 3D walker */
-.walker-section { padding: 10px 0 90px; }
-.walker { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr); gap: 40px; align-items: start; }
-.walker-stage { position: relative; border-radius: 24px; background: #e4e4e6; aspect-ratio: 5 / 6; overflow: hidden; touch-action: none; }
-.walker-stage canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+/* 3D model (try-on page) */
+.walker-section { padding: 10px 0 70px; scroll-margin-top: 90px; }
+.walker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: clamp(24px, 3vw, 44px); align-items: start; }
+.walker > * { min-width: 0; }
+.walker-stage { position: relative; border-radius: 24px; background: #e4e4e6; aspect-ratio: 5 / 6; max-height: calc(100vh - 130px); width: 100%; overflow: hidden; touch-action: none; }
+.walker-stage canvas { position: absolute; inset: 0; display: block; width: 100% !important; height: 100% !important; cursor: grab; }
 .walker-stage canvas:active { cursor: grabbing; }
-.walker-status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font-weight: 600; color: var(--ink-2); }
+.walker-status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font-weight: 600; color: var(--ink-2); z-index: 1; }
 .walker-status[hidden] { display: none; }
-.walker-cam { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
-.walker-cam .chip { background: rgba(255,255,255,.88); backdrop-filter: blur(6px); min-height: 40px; padding: 7px 16px; }
+.walker-cam { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap; z-index: 1; }
+.walker-cam .chip { background: rgba(255,255,255,.9); backdrop-filter: blur(6px); min-height: 40px; padding: 7px 16px; }
 .walker-cam .chip:hover { background: #fff; }
-.walker-ui { display: grid; gap: 22px; }
+.walker-ui { display: grid; gap: 22px; position: sticky; top: 104px; }
 .walker-row { display: grid; gap: 10px; }
 .walker-label { font-weight: 700; font-size: 14px; color: var(--ink-2); }
-.walker-seg { display: inline-flex; flex-wrap: wrap; background: var(--bg-2); border-radius: 999px; padding: 4px; gap: 2px; justify-self: start; }
-.walker-seg button { border: 0; background: none; padding: 10px 18px; border-radius: 999px; font-weight: 700; font-size: 14px; cursor: pointer; min-height: 40px; }
+.walker-seg { display: flex; flex-wrap: wrap; background: var(--bg-2); border-radius: 22px; padding: 4px; gap: 2px; width: fit-content; max-width: 100%; }
+.walker-seg button { border: 0; background: none; padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 14px; cursor: pointer; min-height: 40px; white-space: nowrap; }
 .walker-seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.walker-field input[type="range"] { width: 100%; }
 .walker-shoes { display: flex; gap: 8px; flex-wrap: wrap; }
 .walker-shoe { width: 72px; height: 72px; border-radius: 16px; border: 2px solid var(--line); background: var(--bg-2); padding: 6px; cursor: pointer; font-weight: 700; font-size: 13px; }
-.walker-shoe img { width: 100%; height: 100%; }
+.walker-shoe img { width: 100%; height: 100%; object-fit: contain; }
 .walker-shoe[aria-pressed="true"] { border-color: var(--ink); }
 .walker-shoenote { max-width: 40ch; }
 .walker-toggle { display: flex; gap: 10px; align-items: center; font-size: 14px; font-weight: 600; color: var(--ink-2); }
-.walker-toggle input { width: 20px; height: 20px; accent-color: #0a0a0a; }
+.walker-toggle input { width: 20px; height: 20px; flex: none; accent-color: #0a0a0a; }
 .walker-toggle:has(input:disabled) { opacity: .45; }
 @media (max-width: 900px) {
   .walker { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .walker-stage { aspect-ratio: 4 / 5; }
+  .walker-stage { aspect-ratio: 4 / 5; max-height: 78vh; }
+  .walker-ui { position: static; }
+  .walker-cam { left: 10px; right: 10px; bottom: 10px; flex-wrap: nowrap; overflow-x: auto; gap: 6px; scrollbar-width: none; }
+  .walker-cam .chip { min-height: 34px; padding: 5px 12px; font-size: 12px; flex: none; border-width: 1.5px; }
 }

@@ -1,0 +1,25 @@
+/* Customer account page */
+.account { padding-bottom: 110px; }
+.acct-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 28px; align-items: start; }
+.acct-card { padding: 30px; border-radius: var(--radius); background: var(--bg-2); }
+.acct-h { font-size: 22px; margin: 0 0 18px; }
+.acct-side { padding: 30px 8px; }
+.acct-side h3 { margin-top: 0; }
+.acct-side ul { padding-left: 20px; color: var(--ink-2); display: grid; gap: 6px; }
+.acct-tabs { display: inline-flex; background: #fff; border-radius: 999px; padding: 4px; gap: 2px; justify-self: start; }
+.acct-tabs button { border: 0; background: none; padding: 10px 18px; border-radius: 999px; font-weight: 700; font-size: 14px; cursor: pointer; min-height: 40px; }
+.acct-tabs button[aria-selected="true"] { background: var(--ink); color: #fff; }
+.acct-google { min-height: 44px; }
+.acct-or { display: flex; align-items: center; gap: 12px; color: var(--ink-3); font-size: 13px; margin: 0; }
+.acct-or::before, .acct-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.acct-msg { margin: 0; min-height: 1.4em; font-weight: 600; color: #b3261e; }
+.acct-msg:is([role="status"]) { color: var(--ink); }
+.acct-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.acct-pw summary { cursor: pointer; font-weight: 700; font-size: 14px; min-height: 36px; display: flex; align-items: center; }
+.acct-pw label { margin-top: 12px; }
+.acct-orders { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.acct-orders li { display: flex; justify-content: space-between; gap: 16px; padding: 14px 16px; background: #fff; border-radius: 14px; }
+.acct-orders li div { display: grid; gap: 2px; }
+.acct-orders li span { color: var(--ink-2); font-size: 14px; }
+.acct-orders li b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 900px) { .acct-grid { grid-template-columns: minmax(0, 1fr); } .acct-card { padding: 22px; } }

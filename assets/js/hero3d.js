@@ -6,7 +6,7 @@
    Falls back to the CSS animation in app.js if three.js or WebGL isn't available. */
 window.YOLO_HERO3D = "loading";
 
-const THREE_URL = "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+const THREE_URL = "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
 const stage = document.getElementById("run-stage");
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 

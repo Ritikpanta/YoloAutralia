@@ -1,6 +1,6 @@
 // GET /api/stock?slug=odin  ->  live sizes per colourway from the Google Sheet
 // { live: true, colours: { "patent-tan": {39:1,40:1,...} }, any: {39:n,...} }
-import { PRODUCTS } from "../lib/catalog.js";
+import { liveProducts } from "../lib/catalog-live.js";
 import { sheetsConfigured, readInventory, findRow, available } from "../lib/sheets.js";
 
 const SIZES = [39, 40, 41, 42, 43];
@@ -9,7 +9,7 @@ const json = (body, status = 200, cache = "public, s-maxage=30, stale-while-reva
 
 export async function GET(request) {
   const slug = new URL(request.url).searchParams.get("slug");
-  const p = PRODUCTS.find((x) => x.slug === slug);
+  const p = (await liveProducts()).find((x) => x.slug === slug);
   if (!p) return json({ error: "Unknown product" }, 404, "no-store");
   if (!sheetsConfigured()) return json({ live: false }, 200, "no-store");
   try {

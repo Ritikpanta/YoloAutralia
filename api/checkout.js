@@ -3,6 +3,8 @@ import { priceCart, encodeLine } from "../lib/cart-logic.js";
 import { SHOP } from "../lib/shop-config.js";
 import { stripe } from "../lib/stripe.js";
 import { sheetsConfigured, readInventory, findRow, available } from "../lib/sheets.js";
+import { liveProducts } from "../lib/catalog-live.js";
+import { customerFrom } from "../lib/auth.js";
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
@@ -16,7 +18,7 @@ export async function POST(request) {
   let body;
   try { body = await request.json(); } catch { return json({ error: "Invalid request." }, 400); }
 
-  const cart = priceCart(body?.items);
+  const cart = priceCart(body?.items, await liveProducts());
   if (cart.errors.length) return json({ error: cart.errors[0], errors: cart.errors }, 400);
 
   // Live stock check against the Google Sheet
@@ -75,6 +77,7 @@ export async function POST(request) {
       }
     }],
     phone_number_collection: { enabled: true },
+    ...(customerFrom(request)?.email ? { customer_email: customerFrom(request).email } : {}),
     billing_address_collection: "auto",
     invoice_creation: { enabled: true },
     allow_promotion_codes: true,

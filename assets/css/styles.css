@@ -312,6 +312,8 @@ section.block { padding: 110px 0; position: relative; }
 
 /* ---------- Header cart button ---------- */
 .header-actions { display: flex; align-items: center; gap: 14px; }
+.account-link { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; white-space: nowrap; border-radius: 999px; font-weight: 700; font-size: 14px; text-decoration: none; }
+.account-link:hover, .account-link[aria-current="page"] { background: var(--bg-2); }
 .cart-btn { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border-radius: 999px; border: 2px solid var(--ink); background: #fff; cursor: pointer; font-weight: 700; font-size: 14px; }
 .cart-btn .count { min-width: 22px; height: 22px; border-radius: 11px; background: var(--ink); color: #fff; font-size: 12px; display: inline-grid; place-items: center; padding: 0 6px; }
 .cart-btn.bump { animation: bump .45s ease; }
@@ -381,6 +383,7 @@ section.block { padding: 110px 0; position: relative; }
   .brand .wordmark { font-size: 10px; }
   .cart-btn .label { display: none; }
   .cart-btn { padding: 8px 12px; }
+  .account-link { padding: 8px 8px; font-size: 13px; }
 }
 
 /* Hero: the 3D canvas fills the whole section; copy sits on top */

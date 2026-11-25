@@ -1,6 +1,7 @@
 /* YOLO Australia — site behaviour (ES module, no build step, no dependencies).
    Loaded after /lib/catalog.js and /lib/shop-config.js, which set window.YOLO_PRODUCTS / YOLO_SHOP. */
 const CFG = window.YOLO_CONFIG || {};
+await (window.YOLO_CATALOG_READY || null);           // admin edits (see lib/live-catalog.js)
 const PRODUCTS = window.YOLO_PRODUCTS || [];
 const SHOP = window.YOLO_SHOP || { shipping: { flatRate: 0, freeOver: 0 }, maxQtyPerLine: 5, maxCartLines: 20 };
 const shippingFor = window.YOLO_SHIPPING_FOR || (() => 0);
@@ -159,10 +160,14 @@ function renderChrome() {
           ${link("/contact", "Contact", page === "contact")}
         </nav>
         <div class="header-actions">
+          <a class="account-link" href="/account"${page === "account" ? ' aria-current="page"' : ""}><span class="label" data-o="acct">Sign in</span></a>
           <button class="cart-btn" type="button" aria-label="Open cart"><span class="label">Cart</span> <span class="count">0</span></button>
           <button class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="nav"><span></span><span></span><span></span></button>
         </div>
       </div>`;
+    fetch("/api/account?a=me", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (d?.user) $('[data-o="acct"]', header).textContent = (d.user.name || "").split(" ")[0] || "Account";
+    }).catch(() => {});
     const toggle = $(".nav-toggle", header), nav = $(".nav", header);
     toggle.addEventListener("click", () => { const open = nav.classList.toggle("open"); toggle.setAttribute("aria-expanded", String(open)); });
     $(".cart-btn", header).addEventListener("click", () => openCart(true));
@@ -501,13 +506,13 @@ function initProduct() {
 
   update();
 
-  // Try it on in 3D, right on the product page
+  // Size finder, right on the product page
   root.insertAdjacentHTML("afterend", `
     <section class="fit-section wrap" id="try-on">
-      <div class="section-head"><div><p class="eyebrow">Try it on</p><h2>See ${esc(p.name)} on you</h2></div></div>
+      <div class="section-head"><div><p class="eyebrow">Your size</p><h2>Find your size in ${esc(p.name)}</h2></div></div>
       <div id="pdp-fit"></div>
     </section>`);
-  import("/assets/js/tryon.js?v=10").then(({ mountFitPanel }) => {
+  import("/assets/js/tryon.js?v=12").then(({ mountFitPanel }) => {
     fitPanel = mountFitPanel(document.getElementById("pdp-fit"), {
       products: PRODUCTS, slug: p.slug,
       getColour: () => (colour ? { hex: colour.hex, name: colour.name } : null),

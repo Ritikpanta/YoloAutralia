@@ -1,8 +1,8 @@
 /* Fit panel — used on every product page and on /try-on.
-   Height, weight and foot length -> recommended EU size, the body maths, a 3D mannequin wearing the
-   shoe (assets/js/fit3d.js), and a to-scale foot close-up. On /try-on it adds a shoe picker and a
-   camera mode. Everything runs in the browser; nothing is uploaded. */
-import { createFit3D, footAndShoe, solveBody, styleFor, sampleUpperColour, footprint } from "./fit3d.js";
+   Height, weight and foot length -> recommended EU size, and a to-scale drawing of the foot inside the shoe.
+   On /try-on it adds a shoe picker and a camera mode. The 3D model lives in walker3d.js (try-on page).
+   Everything runs in the browser; nothing is uploaded. */
+import { footAndShoe, bmiOf, toePoint, footprint } from "./sizefit.js?v=12";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -72,58 +72,20 @@ export function mountFitPanel(root, opts) {
       <details class="maths"><summary>How we worked this out</summary><div data-o="maths"></div></details>
     </form>
     <div class="fit-view">
-      <div class="view-tabs" role="tablist" aria-label="View">
-        <button type="button" role="tab" aria-selected="true" data-view="model">3D model</button>
-        <button type="button" role="tab" aria-selected="false" data-view="foot">Foot close-up</button>
-      </div>
-      <div class="view-stage">
-        <div class="fit3d" data-o="stage3d"><p class="fit3d-msg" data-o="msg">Loading 3D model…</p>
-          <div class="fit3d-tools"><button type="button" data-p="full">Full body</button><button type="button" data-p="tee">Tee</button><button type="button" data-p="feet">Feet</button><button type="button" data-p="reset" aria-label="Reset view">↺</button></div>
-          <p class="fit3d-hint">Drag to rotate · scroll or pinch to zoom · tap Tee to see the print</p>
-          <div class="fit3d-measure" data-o="measure" hidden></div>
-        </div>
-        <svg data-o="foot" viewBox="0 0 600 700" role="img" aria-label="Top view of your foot inside the shoe, drawn to scale" hidden></svg>
-      </div>
+      <svg class="foot-svg" data-o="foot" viewBox="0 0 600 700" role="img" aria-label="Top view of your foot inside the shoe, drawn to scale"></svg>
     </div>`;
 
   const inp = { h: $('[data-k="h"]'), w: $('[data-k="w"]'), f: $('[data-k="f"]'), shoe: $('[data-k="shoe"]') };
   if (inp.shoe) inp.shoe.value = product.slug;
   try { const sv = JSON.parse(localStorage.getItem("yolo-fit") || "null"); if (sv) { inp.h.value = sv.h; inp.w.value = sv.w; if (sv.f) inp.f.value = sv.f; } } catch {}
 
-  let teeBack = false, view = "model", viewer = null, lastEU = null, fit = null, raf = 0;
-  const stage = $('[data-o="stage3d"]');
-
-  // ---------- 3D viewer ----------
-  createFit3D(stage).then((v) => {
-    viewer = v;
-    if (!v) { $('[data-o="msg"]').textContent = "3D needs WebGL, which this browser has turned off. Showing the foot close-up instead."; setView("foot"); return; }
-    $('[data-o="msg"]').remove();
-    stage.classList.add("ready");
-    render3D();
-  });
-  root.querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => {
-    if (!viewer) return;
-    if (b.dataset.p === "reset") viewer.resetView();
-    else if (b.dataset.p === "tee") { teeBack = !teeBack; viewer.preset("top"); viewer.setAzimuth(teeBack ? Math.PI : 0); b.textContent = teeBack ? "Tee (back)" : "Tee (front)"; }
-    else if (b.dataset.p === "feet") setView("foot");
-    else if (b.dataset.p === "full") setView("model");
-    else viewer.preset(b.dataset.p);
-  }));
-
-  async function render3D() {
-    if (!viewer || !fit) return;
-    const chosen = opts.getColour?.();
-    let colour, gloss;
-    if (chosen && chosen.hex) { colour = parseInt(chosen.hex.replace("#", ""), 16); gloss = /patent|shiny/i.test(chosen.name || ""); }
-    else { const img = await loadImg(product.cutout || product.images[0]); colour = img ? sampleUpperColour(img) : 0x222222; gloss = /shiny|patent/i.test(product.description || "") || product.slug === "odin"; }
-    viewer.update({ heightCm: +inp.h.value, weightKg: +inp.w.value, fit, style: styleFor(product), colour, gloss, slug: product.slug, colourName: chosen?.name || product.colourways?.[0]?.name });
-  }
+  let lastEU = null, fit = null, raf = 0;
 
   // ---------- numbers ----------
   function update() {
     const h = +inp.h.value, w = +inp.w.value, f = parseFloat(inp.f.value);
     fit = footAndShoe(h, w, f);
-    const body = solveBody(h, w);
+    const bmi = bmiOf(h, w);
     $('[data-o="h"]').textContent = `${h} cm`;
     $('[data-o="w"]').textContent = `${w} kg`;
     $('[data-o="eu"]').textContent = `EU ${fit.eu}`;
@@ -133,33 +95,27 @@ export function mountFitPanel(root, opts) {
     if (raw < 39) note = `Your foot (${fit.footCm} cm) is shorter than our range, which starts at EU 39. EU 39 may feel loose.`;
     else if (raw > 43) note = `Your foot (${fit.footCm} cm) is longer than our range, which ends at EU 43. EU 43 may feel tight.`;
     else if (Math.abs(fit.euExact - raw) > 0.35) note += ` You're between sizes. EU ${Math.min(43, Math.ceil(fit.euExact))} gives more room.`;
-    if (body.bmi >= 30 && raw >= 39 && raw < 43) note += " If your feet are wide, consider half a size to one size up.";
+    if (bmi >= 30 && raw >= 39 && raw < 43) note += " If your feet are wide, consider half a size to one size up.";
     $('[data-o="note"]').textContent = note;
     $('[data-a="pick"]').textContent = opts.onPickSize ? `Select EU ${fit.eu}` : `Choose colour & add EU ${fit.eu}`;
     if (lastEU !== fit.eu) { const r = $(".result"); r.classList.remove("pop"); void r.offsetWidth; r.classList.add("pop"); lastEU = fit.eu; }
     $('[data-o="maths"]').innerHTML = `
       <dl>
-        <dt>Body mass index</dt><dd>${body.bmi.toFixed(1)} = ${w} kg ÷ (${(h / 100).toFixed(2)} m)²</dd>
-        <dt>Body volume</dt><dd>${body.targetL.toFixed(1)} L = ${w} kg ÷ 1.01 kg/L (average body density)</dd>
-        <dt>Model build factor</dt><dd>${body.s.toFixed(3)}. Girths are scaled until the 3D model's volume is ${body.volumeL.toFixed(1)} L</dd>
-        <dt>Proportions</dt><dd>Hip joint ${(0.505 * h).toFixed(0)} cm · knee ${(0.285 * h).toFixed(0)} cm · shoulder ${(0.78 * h).toFixed(0)} cm (ratios of height). The mannequin is sculpted from smooth muscle-group shapes, and every girth scales with the build factor</dd>
+        <dt>Body mass index</dt><dd>${bmi.toFixed(1)} = ${w} kg ÷ (${(h / 100).toFixed(2)} m)². Used only to allow for wider feet</dd>
         <dt>Foot</dt><dd>${fit.footCm} cm long × ${fit.breadthCm.toFixed(1)} cm wide${fit.estimated ? " (estimated as 15.2% of height)" : ""}</dd>
         <dt>Size</dt><dd>EU = 1.5 × (${fit.footCm} + 1.5) = ${fit.euExact.toFixed(2)} → EU ${fit.eu}</dd>
         <dt>Shoe</dt><dd>${fit.insideCm.toFixed(1)} cm inside, ${fit.outerCm.toFixed(1)} cm outside · ${fit.roomCm.toFixed(1)} cm toe room</dd>
       </dl>`;
-    const verdictShort = fit.roomCm < 0.5 ? "Snug" : fit.roomCm > 2 ? "Roomy" : "Good fit";
-    $('[data-o="measure"]').innerHTML = `<strong>${verdictShort}</strong><span>Your foot ${fit.footCm.toFixed(1)} cm · EU ${fit.eu} inside ${fit.insideCm.toFixed(1)} cm · ${fit.roomCm.toFixed(1)} cm toe room</span><em>See-through shoe: the grey foot inside is yours, to scale</em>`;
     try { localStorage.setItem("yolo-fit", JSON.stringify({ h, w, f: inp.f.value })); } catch {}
     cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => { render3D(); drawFoot(); });
+    raf = requestAnimationFrame(drawFoot);
   }
 
   // ---------- foot close-up: top view, everything to the same scale ----------
   async function drawFoot() {
-    if (view !== "foot" || !fit) return;
+    if (!fit) return;
     const svg = $('[data-o="foot"]');
-    const st = styleFor(product);
-    const point = { loafer: 1.7, derby: 1.55, sneaker: 2.2, slipon: 2.2, chelsea: 1.8, zip: 1.8, work: 2.6 }[st] || 1.8;
+    const point = toePoint(product);
     const outW = fit.breadthCm + 1.6, inW = fit.breadthCm + 0.5;          // shoe outside / insole width, cm
     const PX = 500 / fit.outerCm, x0 = 50, CY = 330;
     const X = (cm) => x0 + cm * PX;
@@ -208,24 +164,6 @@ export function mountFitPanel(root, opts) {
         <rect x="290" y="${CY + outW / 2 * PX + 200}" width="16" height="12" fill="#fff" stroke="#0a0a0a" stroke-width="1.5"/><text x="312" y="${CY + outW / 2 * PX + 210}">Outside of the shoe</text></g>`;
   }
 
-  function setView(v) {
-    view = v;
-    root.querySelectorAll(".view-tabs button").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.view === v)));
-    if (viewer) {
-      // the close-up is the 3D model itself: the camera flies to the feet and the shoes turn see-through
-      stage.removeAttribute("hidden");
-      $('[data-o="foot"]').setAttribute("hidden", "");
-      viewer.preset(v === "foot" ? "feet" : "full");
-      $('[data-o="measure"]').toggleAttribute("hidden", v !== "foot");
-      return;
-    }
-    // no WebGL: a to-scale drawing instead
-    stage.toggleAttribute("hidden", v !== "model");
-    $('[data-o="foot"]').toggleAttribute("hidden", v !== "foot");
-    if (v === "foot") drawFoot();
-  }
-  root.querySelectorAll(".view-tabs button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
-
   [inp.h, inp.w, inp.f].forEach((el) => el.addEventListener("input", update));
   inp.shoe?.addEventListener("change", () => {
     product = products.find((p) => p.slug === inp.shoe.value);
@@ -239,7 +177,7 @@ export function mountFitPanel(root, opts) {
   if (opts.camera) $('[data-a="camera"]').addEventListener("click", () => openCamera(product));
   update();
 
-  return { refresh: () => render3D(), get product() { return product; } };
+  return { refresh: () => drawFoot(), get product() { return product; } };
 }
 
 /* ---------- Camera: overlay the shoe on the live camera, drag / pinch to fit (try-on page) ---------- */
@@ -300,6 +238,7 @@ function initCamera() {
 /* ---------- /try-on page ---------- */
 const pageRoot = document.getElementById("fit-root");
 if (pageRoot) {
+  await (window.YOLO_CATALOG_READY || null);
   initCamera();
   const slug = new URLSearchParams(location.search).get("m");
   const products = (window.YOLO_PRODUCTS || []).filter((p) => p.cutout);

@@ -5,6 +5,7 @@
 import { verifyStripeSignature } from "../lib/stripe.js";
 import { decodeLine } from "../lib/cart-logic.js";
 import { sheetsConfigured, orderAlreadyLogged, logOrder, decrementStock } from "../lib/sheets.js";
+import { allProducts } from "../lib/catalog-live.js";
 
 const ok = (msg = "ok", status = 200) => new Response(msg, { status });
 
@@ -27,7 +28,8 @@ export async function POST(request) {
   try {
     if (await orderAlreadyLogged(s.id)) return ok("already processed");
     const n = Number(s.metadata.lines || 0);
-    const lines = Array.from({ length: n }, (_, i) => decodeLine(s.metadata[`l${i}`])).filter(Boolean);
+    const products = await allProducts({ fresh: true });
+    const lines = Array.from({ length: n }, (_, i) => decodeLine(s.metadata[`l${i}`], products)).filter(Boolean);
     const ship = s.shipping_details || s.collected_information?.shipping_details || {};
     const a = ship.address || {};
     const address = [ship.name, a.line1, a.line2, `${a.city || ""} ${a.state || ""} ${a.postal_code || ""}`.trim(), a.country].filter(Boolean).join(", ");
