@@ -127,7 +127,7 @@ export function mountWalker(root, { products = [] } = {}) {
       controls.addEventListener("start", () => { camAnim = null; });
       clock = new THREE.Clock();
       new ResizeObserver(resize).observe(canvasBox); resize();
-      meta = await fetch(BASE + "walker.json").then((r) => r.json()).catch(() => ({}));
+      meta = await fetch(BASE + "walker.json?v=14").then((r) => r.json()).catch(() => ({}));
       manifest = await fetch("/assets/models/shoes/manifest.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
       buildShoeList();
       await showBody();
@@ -254,7 +254,7 @@ export function mountWalker(root, { products = [] } = {}) {
 
   async function loadBody(b) {
     if (bodies[b]) return bodies[b];
-    const gltf = await (await loader()).loadAsync(BASE + `walker-${b}.glb`);
+    const gltf = await (await loader()).loadAsync(BASE + `walker-${b}.glb?v=14`);
     const rootObj = new THREE.Group(); rootObj.add(gltf.scene);
     const rec = { root: rootObj, mixer: new THREE.AnimationMixer(gltf.scene), accent: [], skin: [], stripe: [], parts: [], bones: {}, rest: {}, hoodie: [] };
     gltf.scene.traverse((o) => {
